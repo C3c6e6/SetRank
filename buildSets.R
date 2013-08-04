@@ -3,18 +3,21 @@
 # Author: cesim
 ###############################################################################
 library("reactome.db")
-library(sets)
-
+library("igraph")
 uniqueCount <- function(x) {
 	if (class(x) == "factor") length(levels(x)) else length(unique(x))
 }
+
+"%i%" <- intersect
+"%u%" <- union
+"%d%" <- setdiff
 
 buildSetCollection <- function(...) {
 	annotationTable = do.call(rbind, list(...))
 	collection = list()
 	collection$sets = by(annotationTable, annotationTable[,"termID"], 
 			function(x) {
-				geneSet = as.set(as.character(x[,"geneID"]))
+				geneSet = unique(as.character(x[,"geneID"]))
 				attr(geneSet, "ID") <- unique(as.character(x[,"termID"]))
 				attr(geneSet, "name") <- unique(as.character(x[,"termName"]))
 				attr(geneSet, "db") <- unique(as.character(x[,"dbName"]))
@@ -54,22 +57,13 @@ getSignificantIntersections <- function(collectionSets, annotationTable, g, pVal
 	pValueFrame$pValue = apply(pValueFrame, 1, getIntersectionPValue, collectionSets, g)
 	pValueFrame = pValueFrame[pValueFrame$pValue <= pValueCutoff,]
 	message(nrow(pValueFrame), " intersections significant")
-}
-
-setIntersectionsPerGene <- function(setIDs, setCollection, g) {
-	message(length(setIDs))
-	pValues = unlist(lapply(combn(setIDs, 2, simplify=FALSE), 
-					getIntersectionPValue, setCollection, g))
-	pValueFrame = as.data.frame(t(combn(setIDs, 2)))
-	colnames(pValueFrame) <- c("setA", "setB")
-	pValueFrame$pValue <- pValues
 	pValueFrame
 }
 
 getIntersectionPValue <-function(setIDPair, setCollection, g) {
 	setA = setCollection[[setIDPair[1]]]
 	setB = setCollection[[setIDPair[2]]]
-	i = length(setA & setB)
+	i = length(setA %i% setB)
 	m = length(setA)
 	n = length(setB)
 	return(intersectionTest(g, m, n, i)$p.value)
@@ -80,10 +74,10 @@ intersectionTest <- function(g, m, n, i) {
 }
 
 getPrimarySetPValues <- function(setCollection, selectedGenes, referenceGenes = NA) {
-	selectedGenes = as.set(as.character(selectedGenes))
+	selectedGenes = as.character(selectedGenes)
 	if (!is.na(referenceGenes)) {
 		referenceGenes = as.set(as.character(referenceGenes))
-		setCollection$sets = lapply(setCollection$sets, set_intersection, 
+		setCollection$sets = lapply(setCollection$sets, intersect, 
 				referenceGenes)
 		g = length(referenceGenes)
 	} else {
@@ -92,20 +86,34 @@ getPrimarySetPValues <- function(setCollection, selectedGenes, referenceGenes = 
 	unlist(lapply(setCollection$sets, getSetPValue, selectedGenes, g))
 }
 
-buildEdgeTable <- function(setCollection, setPValues, selectedGenes, setPCutoff = 0.01) {
-	significantSetIDs = as.set(names(setPValues[setPValues <= setPCutoff]))
-	message(length(significantSetIDs), " significant sets")
+buildEdgeTable <- function(setCollection, setPValues, selectedGenes, 
+		setPCutoff, heteroPCutoff) {
+	significantSetIDs = names(setPValues[setPValues <= setPCutoff])
+	message(length(significantSetIDs), " significant sets", appendLF=FALSE)
 	intersectionTable = setCollection$intersections
 	intersectionsToTest =  apply(intersectionTable, 1, 
-			function(x) length(set_intersection(x, significantSetIDs)) == 2)
+			function(x) (length(x %i% significantSetIDs) == 2))
 	intersectionTable = intersectionTable[intersectionsToTest,]
-	do.call(rbind, apply(intersectionTable, 1, getSetPairStatistics, 
+	message(" - ", nrow(intersectionTable), " intersections to test.")
+	edgeTable = do.call(rbind, apply(intersectionTable, 1, getSetPairStatistics, 
 					selectedGenes, setCollection))
+	edgeTable$discardFrom = FALSE
+	edgeTable$discardTo = FALSE
+	#TODO: check for intersections
+	edgeTable[edgeTable$from_pHetero <= heteroPCutoff & 
+					edgeTable$from_pDiff > setPCutoff,]$discardFrom = TRUE
+	edgeTable[edgeTable$to_pHetero <= heteroPCutoff & 
+					edgeTable$to_pDiff > setPCutoff,]$discardTo = TRUE
+	edgeTable[edgeTable$discardFrom & 
+					edgeTable$discardTrue,]$type = "intersection"
+    edgeTable[edgeTable$type == "intersection"]$discardFrom = FALSE
+	edgeTable[edgeTable$type == "intersection"]$discardTrue = FALSE
+	edgeTable
 }
 
 getSetPValue <- function(geneSet, selectedGenes, g) {
 	m = length(geneSet)
-	i = length(set_intersection(geneSet, selectedGenes))
+	i = length(geneSet %i% selectedGenes)
 	s = length(selectedGenes)
 	fisher.test(rbind(c(i,m-i),c(s-i,g-(m+s-i))), 
 			alternative="greater")$p.value
@@ -114,54 +122,74 @@ getSetPValue <- function(geneSet, selectedGenes, g) {
 getSetPairStatistics <- function(row, selectedGenes, setCollection) {
 	setIDA = row[1]
 	setIDB = row[2]
-	message(setIDA, " ", setIDB)
 	setA = setCollection$sets[[setIDA]]
 	setB = setCollection$sets[[setIDB]]
-	intersection = setA & setB
+	intersection = setA %i% setB
 	a = list(id = setIDA)
 	b = list(id = setIDB)
-	union = setA | setB
-	diffA = setA - setB
-	diffB = setB - setA
-	type = "intersection"
+	unionSet = setA %u% setB
+	diffA = setA %d% setB
+	diffB = setB %d% setA
+	type = "overlap"
 	a$pDiff = getSetPValue(diffA, selectedGenes, setCollection$g)
 	a$pHetero = setHeterogeneityPValue(diffA, intersection, selectedGenes)
+	a$diffSize = length(diffA)
 	b$pDiff = getSetPValue(diffB, selectedGenes, setCollection$g)
 	b$pHetero = setHeterogeneityPValue(diffB, intersection, selectedGenes)
+	b$diffSize = length(diffB)
 	if (length(diffA) == 0 || length(diffB) == 0) {
 		type = "subset"
 		if (length(diffA) == 0) {
-			donor = a
-			acceptor = b
+			from = a
+			to = b
 		} else {
-			donor = b
-			acceptor = a
+			from = b
+			to = a
 		}
-		donor$pDiff = 1
-		donor$pHetero = 1
+		from$pDiff = 1
+		from$pHetero = 1
 	} else if (a$pDiff > b$pDiff) {
-		donor = a
-		acceptor = b
+		from = a
+		to = b
 	} else {
-		donor = b
-		acceptor = a
+		from = b
+		to = a
 	}
-	jaccard = length(intersection)/length(union)
-	data.frame(donor=donor$id, type=type, acceptor=acceptor$id, 
-			donor_pDiff = donor$pDiff, donor_pHetero = donor$pHetero, 
-			acceptor_pDiff = acceptor$pDiff, 
-			acceptor_pHetero = acceptor$pHetero, jaccard=jaccard)
+	jaccard = length(intersection)/length(unionSet)
+	data.frame(from=from$id, to=to$id,  type=type, from_pDiff = from$pDiff, 
+			from_pHetero = from$pHetero, from_diffSize = from$diffSize, 
+			to_pDiff = to$pDiff, to_pHetero = to$pHetero, 
+			to_diffSize = to$diffSize, intersectionSize = length(intersection),
+			jaccard=jaccard)
 }
 
 setHeterogeneityPValue <- function(difference, intersection, selectedGenes) {
-	differenceNotSelection = difference - selectedGenes
-	differenceSelection = difference & selectedGenes
-	intersectionNotSelection = intersection - selectedGenes
-	intersectionSelection = intersection & selectedGenes
+	differenceNotSelection = difference %d% selectedGenes
+	differenceSelection = difference %i% selectedGenes
+	intersectionNotSelection = intersection %d% selectedGenes
+	intersectionSelection = intersection %i% selectedGenes
 	fisher.test(rbind(
-		c(length(differenceNotSelection),length(differenceSelection)),
-		c(length(intersectionNotSelection),length(intersectionSelection))
-   ))$p.value
+					c(length(differenceNotSelection),length(differenceSelection)),
+					c(length(intersectionNotSelection),length(intersectionSelection))
+			))$p.value
+}
+
+setRankAnalysis <- function(setCollection, selectedGenes, setPCutoff = 0.01, 
+		heteroPCutoff = setPCutoff) {
+	pValues = getPrimarySetPValues(setCollection, selectedGenes)
+	edgeTable = buildEdgeTable(setCollection, pValues, selectedGenes, 
+			setPCutoff, heteroPCutoff)
+	toDelete = unique(
+			union(edgeTable[discardFrom,]$from, edgeTable[discardTo,]$to))
+	vertexTable = data.frame(ID=sapply(setCollection$sets, attr, "ID"), 
+			name = sapply(setCollection$sets, attr, "name"), 
+			database=sapply(setCollection$sets, attr, "db"),  pValue = pValues,
+			size = sapply(setCollection$sets, length))
+	vertexTable = vertexTable[vertexTable$pValue <= setPCutoff,]
+	message("discarded ", length(toDelete), " out of ", nrow(vertexTable), 
+			" gene sets.")
+	setNet = graph.data.frame(edgeTable, directed=TRUE, vertices=vertexTable)
+	setNet - toDelete
 }
 
 load("ratCollection.Rda")
@@ -172,8 +200,4 @@ geneIDs = unique(c(geneIDTable[geneIDTable$RefSeq.mRNA..e.g..NM_001195597. %in%
 								geneAccs,]$EntrezGene.ID, 
 				geneIDTable[geneIDTable$Ensembl.Transcript.ID %in% 
 								geneAccs,]$EntrezGene.ID))
-message(Sys.time())
-pValues = getPrimarySetPValues(ratCollection, geneIDs)
-message(Sys.time())
-testTable = buildEdgeTable(ratCollection, pValues, geneIDs)
-message(Sys.time())
+testOutput = setRankAnalysis(ratCollection, geneIDs)

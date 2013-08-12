@@ -4,39 +4,14 @@
 ###############################################################################
 library("reactome.db")
 library("go.db")
-
 library("igraph")
-uniqueCount <- function(x) {
-	if (class(x) == "factor") length(levels(x)) else length(unique(x))
-}
 
 "%i%" <- intersect
 "%u%" <- union
 "%d%" <- setdiff
 
-buildSetCollection <- function(..., maxSetSize = 2000) {
-	annotationTable = do.call(rbind, list(...))
-	collection = list(maxSetSize = maxSetSize)
-	collection$sets = by(annotationTable, annotationTable[,"termID"], 
-			function(x) {
-				geneSet = unique(as.character(x[,"geneID"]))
-				attr(geneSet, "ID") <- unique(as.character(x[,"termID"]))
-				attr(geneSet, "name") <- unique(as.character(x[,"termName"]))
-				attr(geneSet, "db") <- unique(as.character(x[,"dbName"]))
-				geneSet
-			})
-	collection$g = uniqueCount(annotationTable$geneID)
-	setSizes = sapply(collection$sets, length)
-	collection$bigSets = names(setSizes[setSizes > maxSetSize])
-	message(uniqueCount(annotationTable$dbName), " gene set DBs, ", 
-			length(collection$sets), " initial gene sets, ", 
-			length(collection$sets) - length(collection$bigSets), 
-			" sets remaining and ", collection$g, " genes in collection")
-	collection$intersection.p.cutoff = 0.01
-	collection$intersections = getSignificantIntersections(collection$sets, 
-			annotationTable, collection$g, collection$intersection.p.cutoff,
-			collection$bigSets)
-	collection
+uniqueCount <- function(x) {
+	if (class(x) == "factor") length(levels(x)) else length(unique(x))
 }
 
 organismDBI2AnnotationTable <- function(annotationPackageName) {
@@ -84,6 +59,33 @@ expandWithTermOffspring <- function(subTable, tableSplit, offspringList) {
 	expandedTable[!is.na(expandedTable$geneID),]
 }
 
+
+buildSetCollection <- function(..., maxSetSize = 2000) {
+	annotationTable = do.call(rbind, list(...))
+	collection = list(maxSetSize = maxSetSize)
+	collection$sets = by(annotationTable, annotationTable[,"termID"], 
+			function(x) {
+				geneSet = unique(as.character(x[,"geneID"]))
+				attr(geneSet, "ID") <- unique(as.character(x[,"termID"]))
+				attr(geneSet, "name") <- unique(as.character(x[,"termName"]))
+				attr(geneSet, "db") <- unique(as.character(x[,"dbName"]))
+				geneSet
+			})
+	collection$g = uniqueCount(annotationTable$geneID)
+	setSizes = sapply(collection$sets, length)
+	collection$bigSets = names(setSizes[setSizes > maxSetSize])
+	message(uniqueCount(annotationTable$dbName), " gene set DBs, ", 
+			length(collection$sets), " initial gene sets, ", 
+			length(collection$sets) - length(collection$bigSets), 
+			" sets remaining and ", collection$g, " genes in collection")
+	collection$intersection.p.cutoff = 0.01
+	collection$intersections = getSignificantIntersections(collection$sets, 
+			annotationTable, collection$g, collection$intersection.p.cutoff,
+			collection$bigSets)
+	collection
+}
+
+
 getSignificantIntersections <- function(collectionSets, annotationTable, g, 
 		pValueCutoff, bigSets) {
 	setsPerGene = by(annotationTable, annotationTable$geneID, 
@@ -114,6 +116,24 @@ intersectionTest <- function(g, m, n, i) {
 	fisher.test(rbind(c(i, n-i), c(m, g-(m+n-i))), alternative="greater")
 }
 
+setRankAnalysis <- function(setCollection, selectedGenes, setPCutoff = 0.01, 
+		heteroPCutoff = setPCutoff) {
+	pValues = getPrimarySetPValues(setCollection, selectedGenes)
+	edgeTable = buildEdgeTable(setCollection, pValues, selectedGenes, 
+			setPCutoff, heteroPCutoff)
+	toDelete = unique(union(edgeTable[edgeTable$discardSource,]$source, 
+					edgeTable[edgeTable$discardSink,]$sink))
+	vertexTable = data.frame(name=sapply(setCollection$sets, attr, "ID"), 
+			description = sapply(setCollection$sets, attr, "name"), 
+			database=sapply(setCollection$sets, attr, "db"),  pValue = pValues,
+			pp = -log10(pValues), size = sapply(setCollection$sets, length))
+	vertexTable = vertexTable[vertexTable$pValue <= setPCutoff,]
+	message("discarded ", length(toDelete), " out of ", nrow(vertexTable), 
+			" gene sets.")
+	setNet = graph.data.frame(edgeTable, directed=TRUE, vertices=vertexTable)
+	setNet - toDelete
+}
+
 getPrimarySetPValues <- function(setCollection, selectedGenes, referenceGenes = NA) {
 	selectedGenes = as.character(selectedGenes)
 	if (!is.na(referenceGenes)) {
@@ -127,6 +147,14 @@ getPrimarySetPValues <- function(setCollection, selectedGenes, referenceGenes = 
 	pValues = sapply(setCollection$sets, getSetPValue, selectedGenes, g)
 	pValues[setCollection$bigSets] = 1
 	pValues
+}
+
+getSetPValue <- function(geneSet, selectedGenes, g) {
+	m = length(geneSet)
+	i = length(geneSet %i% selectedGenes)
+	s = length(selectedGenes)
+	fisher.test(rbind(c(i,m-i),c(s-i,g-(m+s-i))), 
+			alternative="greater")$p.value
 }
 
 buildEdgeTable <- function(setCollection, setPValues, selectedGenes, 
@@ -151,14 +179,6 @@ buildEdgeTable <- function(setCollection, setPValues, selectedGenes,
     edgeTable[edgeTable$type == "intersection",]$discardSource = FALSE
 	edgeTable[edgeTable$type == "intersection",]$discardSink = FALSE
 	edgeTable
-}
-
-getSetPValue <- function(geneSet, selectedGenes, g) {
-	m = length(geneSet)
-	i = length(geneSet %i% selectedGenes)
-	s = length(selectedGenes)
-	fisher.test(rbind(c(i,m-i),c(s-i,g-(m+s-i))), 
-			alternative="greater")$p.value
 }
 
 getSetPairStatistics <- function(row, selectedGenes, setCollection) {
@@ -227,23 +247,6 @@ setHeterogeneityPValue <- function(difference, intersection, selectedGenes) {
 			))$p.value
 }
 
-setRankAnalysis <- function(setCollection, selectedGenes, setPCutoff = 0.01, 
-		heteroPCutoff = setPCutoff) {
-	pValues = getPrimarySetPValues(setCollection, selectedGenes)
-	edgeTable = buildEdgeTable(setCollection, pValues, selectedGenes, 
-			setPCutoff, heteroPCutoff)
-	toDelete = unique(union(edgeTable[edgeTable$discardSource,]$source, 
-					edgeTable[edgeTable$discardSink,]$sink))
-	vertexTable = data.frame(name=sapply(setCollection$sets, attr, "ID"), 
-			description = sapply(setCollection$sets, attr, "name"), 
-			database=sapply(setCollection$sets, attr, "db"),  pValue = pValues,
-			pp = -log10(pValues), size = sapply(setCollection$sets, length))
-	vertexTable = vertexTable[vertexTable$pValue <= setPCutoff,]
-	message("discarded ", length(toDelete), " out of ", nrow(vertexTable), 
-			" gene sets.")
-	setNet = graph.data.frame(edgeTable, directed=TRUE, vertices=vertexTable)
-	setNet - toDelete
-}
 
 #ratTable = organismDBI2AnnotationTable("Rattus.norvegicus")
 #load("ratTable.Rda")

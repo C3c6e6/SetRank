@@ -3,6 +3,8 @@
 # Author: cesim
 ###############################################################################
 library("reactome.db")
+library("go.db")
+
 library("igraph")
 uniqueCount <- function(x) {
 	if (class(x) == "factor") length(levels(x)) else length(unique(x))
@@ -12,9 +14,9 @@ uniqueCount <- function(x) {
 "%u%" <- union
 "%d%" <- setdiff
 
-buildSetCollection <- function(...) {
+buildSetCollection <- function(..., maxSetSize = 2000) {
 	annotationTable = do.call(rbind, list(...))
-	collection = list()
+	collection = list(maxSetSize = maxSetSize)
 	collection$sets = by(annotationTable, annotationTable[,"termID"], 
 			function(x) {
 				geneSet = unique(as.character(x[,"geneID"]))
@@ -24,29 +26,68 @@ buildSetCollection <- function(...) {
 				geneSet
 			})
 	collection$g = uniqueCount(annotationTable$geneID)
+	setSizes = sapply(collection$sets, length)
+	collection$bigSets = names(setSizes[setSizes > maxSetSize])
 	message(uniqueCount(annotationTable$dbName), " gene set DBs, ", 
-			uniqueCount(annotationTable$termID), " gene sets and ", 
-			collection$g, " genes in collection")
+			length(collection$sets), " initial gene sets, ", 
+			length(collection$sets) - length(collection$bigSets), 
+			" sets remaining and ", collection$g, " genes in collection")
 	collection$intersection.p.cutoff = 0.01
 	collection$intersections = getSignificantIntersections(collection$sets, 
-			annotationTable, collection$g, collection$intersection.p.cutoff)
+			annotationTable, collection$g, collection$intersection.p.cutoff,
+			collection$bigSets)
 	collection
 }
 
 organismDBI2AnnotationTable <- function(annotationPackageName) {
 	require(annotationPackageName, character.only=TRUE)
+	message("Querying organismDBI...")
 	organismDBIData = select(eval(parse(text=annotationPackageName)), 
 			keys=keys(eval(parse(text=annotationPackageName)), "GOID"), 
 			cols=c("ENTREZID", "TERM"), keytype="GOID")
+	message("Constructing preliminary table...")
 	organismDBIData = organismDBIData[!is.na(organismDBIData$ENTREZID),]
-	data.frame(geneID = organismDBIData$ENTREZID, 
+	preliminaryTable = data.frame(geneID = organismDBIData$ENTREZID, 
 			termID = organismDBIData$GOID, termName = organismDBIData$TERM,
-			dbName = organismDBIData$ONTOLOGY)
+			dbName = organismDBIData$ONTOLOGY, stringsAsFactors=FALSE)
+	message("Querying GO.db...")
+	offspringList = c(as.list(GOBPOFFSPRING), as.list(GOCCOFFSPRING), 
+			as.list(GOMFOFFSPRING))
+	goTerms = as.list(GOTERM)
+	message("Constructing uncovered term table... ", appendLF=FALSE)
+	omittedTermIDs = names(offspringList) %d% unique(preliminaryTable$termID)
+	message("adding ", length(omittedTermIDs), " omitted terms")
+	omittedTermTable = do.call(rbind, lapply(omittedTermIDs, function(x) { 
+						t = goTerms[[x]]; 
+						data.frame(geneID=NA, termID=GOID(t), termName=Term(t), 
+								dbName=Ontology(t), stringsAsFactors=FALSE)}))
+	message("merging...")
+	preliminaryTable = rbind(preliminaryTable, omittedTermTable)
+	message("splitting...")
+	tableSplit = split(preliminaryTable, preliminaryTable$termID)
+	message("extending...")
+	do.call(rbind, lapply(tableSplit, expandWithTermOffspring, tableSplit, 
+					offspringList))
 }
 
-getSignificantIntersections <- function(collectionSets, annotationTable, g, pValueCutoff) {
+expandWithTermOffspring <- function(subTable, tableSplit, offspringList) {
+	termID = unique(as.character(subTable$termID))
+	message(termID)
+	termName = unique(as.character(subTable$termName))
+	dbName = unique(as.character(subTable$dbName))
+	offspring = offspringList[[termID]] %i% names(tableSplit)
+	extension = do.call( rbind, lapply(offspring, 
+					function(x) data.frame(geneID = tableSplit[[x]]$geneID, 
+								termID = termID, termName = termName, 
+								dbName = dbName, stringsAsFactors = FALSE)))
+	expandedTable = rbind(subTable, extension)
+	expandedTable[!is.na(expandedTable$geneID),]
+}
+
+getSignificantIntersections <- function(collectionSets, annotationTable, g, 
+		pValueCutoff, bigSets) {
 	setsPerGene = by(annotationTable, annotationTable$geneID, 
-			function(x) as.character(x$termID))
+			function(x) as.character(x$termID) %d% bigSets)
 	setCount = unlist(lapply(setsPerGene, length))
 	geneOrder = names(sort(setCount[setCount > 1], decreasing=TRUE))
 	pValueFrame = do.call(rbind, lapply(setsPerGene[geneOrder], 
@@ -83,7 +124,9 @@ getPrimarySetPValues <- function(setCollection, selectedGenes, referenceGenes = 
 	} else {
 		g = setCollection$g
 	}
-	unlist(lapply(setCollection$sets, getSetPValue, selectedGenes, g))
+	pValues = sapply(setCollection$sets, getSetPValue, selectedGenes, g)
+	pValues[setCollection$bigSets] = 1
+	pValues
 }
 
 buildEdgeTable <- function(setCollection, setPValues, selectedGenes, 
@@ -97,17 +140,16 @@ buildEdgeTable <- function(setCollection, setPValues, selectedGenes,
 	message(" - ", nrow(intersectionTable), " intersections to test.")
 	edgeTable = do.call(rbind, apply(intersectionTable, 1, getSetPairStatistics, 
 					selectedGenes, setCollection))
-	edgeTable$discardFrom = FALSE
-	edgeTable$discardTo = FALSE
-	#TODO: check for intersections
-	edgeTable[edgeTable$from_pHetero <= heteroPCutoff & 
-					edgeTable$from_pDiff > setPCutoff,]$discardFrom = TRUE
-	edgeTable[edgeTable$to_pHetero <= heteroPCutoff & 
-					edgeTable$to_pDiff > setPCutoff,]$discardTo = TRUE
-	edgeTable[edgeTable$discardFrom & 
-					edgeTable$discardTrue,]$type = "intersection"
-    edgeTable[edgeTable$type == "intersection"]$discardFrom = FALSE
-	edgeTable[edgeTable$type == "intersection"]$discardTrue = FALSE
+	edgeTable$discardSource = FALSE
+	edgeTable$discardSink = FALSE
+	edgeTable[edgeTable$source_pHetero <= heteroPCutoff & 
+					edgeTable$source_pDiff > setPCutoff,]$discardSource = TRUE
+	edgeTable[edgeTable$sink_pHetero <= heteroPCutoff & 
+					edgeTable$sink_pDiff > setPCutoff,]$discardSink = TRUE
+	edgeTable[edgeTable$discardSource & 
+					edgeTable$discardSink,]$type = "intersection"
+    edgeTable[edgeTable$type == "intersection",]$discardSource = FALSE
+	edgeTable[edgeTable$type == "intersection",]$discardSink = FALSE
 	edgeTable
 }
 
@@ -131,36 +173,47 @@ getSetPairStatistics <- function(row, selectedGenes, setCollection) {
 	diffA = setA %d% setB
 	diffB = setB %d% setA
 	type = "overlap"
+    pIntersection = getSetPValue(intersection, selectedGenes, setCollection$g)
 	a$pDiff = getSetPValue(diffA, selectedGenes, setCollection$g)
 	a$pHetero = setHeterogeneityPValue(diffA, intersection, selectedGenes)
 	a$diffSize = length(diffA)
+	a$size = length(setA)
 	b$pDiff = getSetPValue(diffB, selectedGenes, setCollection$g)
 	b$pHetero = setHeterogeneityPValue(diffB, intersection, selectedGenes)
 	b$diffSize = length(diffB)
+	b$size = length(setB)
 	if (length(diffA) == 0 || length(diffB) == 0) {
 		type = "subset"
 		if (length(diffA) == 0) {
-			from = a
-			to = b
+			source = a
+			sink = b
 		} else {
-			from = b
-			to = a
+			source = b
+			sink = a
 		}
-		from$pDiff = 1
-		from$pHetero = 1
+		source$pDiff = 1
+		source$pHetero = 1
 	} else if (a$pDiff > b$pDiff) {
-		from = a
-		to = b
+		source = a
+		sink = b
 	} else {
-		from = b
-		to = a
+		source = b
+		sink = a
 	}
 	jaccard = length(intersection)/length(unionSet)
-	data.frame(from=from$id, to=to$id,  type=type, from_pDiff = from$pDiff, 
-			from_pHetero = from$pHetero, from_diffSize = from$diffSize, 
-			to_pDiff = to$pDiff, to_pHetero = to$pHetero, 
-			to_diffSize = to$diffSize, intersectionSize = length(intersection),
-			jaccard=jaccard)
+	data.frame(source=source$id, sink=sink$id, type=type, 
+			source_pDiff = source$pDiff, source_ppDiff = -log10(source$pDiff), 
+			source_pHetero = source$pHetero, 
+			source_ppHetero = -log10(source$pHetero), 
+			source_diffSize = source$diffSize, sink_pDiff = sink$pDiff, 
+			sink_ppDiff = -log10(sink$pDiff), sink_pHetero = sink$pHetero,
+			sink_diffSize = sink$diffSize, 
+			deltaP = -log10(sink$pDiff) + log10(source$pDiff),
+			intersectionSize = length(intersection), 
+			pIntersection = pIntersection, 
+			ppIntersection = -log10(pIntersection), jaccard=jaccard, 
+			intersectionSourceFraction = length(intersection)/source$size,  
+			stringsAsFactors=FALSE)
 }
 
 setHeterogeneityPValue <- function(difference, intersection, selectedGenes) {
@@ -179,18 +232,22 @@ setRankAnalysis <- function(setCollection, selectedGenes, setPCutoff = 0.01,
 	pValues = getPrimarySetPValues(setCollection, selectedGenes)
 	edgeTable = buildEdgeTable(setCollection, pValues, selectedGenes, 
 			setPCutoff, heteroPCutoff)
-	toDelete = unique(
-			union(edgeTable[discardFrom,]$from, edgeTable[discardTo,]$to))
-	vertexTable = data.frame(ID=sapply(setCollection$sets, attr, "ID"), 
-			name = sapply(setCollection$sets, attr, "name"), 
+	toDelete = unique(union(edgeTable[edgeTable$discardSource,]$source, 
+					edgeTable[edgeTable$discardSink,]$sink))
+	vertexTable = data.frame(name=sapply(setCollection$sets, attr, "ID"), 
+			description = sapply(setCollection$sets, attr, "name"), 
 			database=sapply(setCollection$sets, attr, "db"),  pValue = pValues,
-			size = sapply(setCollection$sets, length))
+			pp = -log10(pValues), size = sapply(setCollection$sets, length))
 	vertexTable = vertexTable[vertexTable$pValue <= setPCutoff,]
 	message("discarded ", length(toDelete), " out of ", nrow(vertexTable), 
 			" gene sets.")
 	setNet = graph.data.frame(edgeTable, directed=TRUE, vertices=vertexTable)
 	setNet - toDelete
 }
+
+#ratTable = organismDBI2AnnotationTable("Rattus.norvegicus")
+#load("ratTable.Rda")
+#ratCollection=buildSetCollection(ratTable, maxSetSize = 500)
 
 load("ratCollection.Rda")
 conversionTable = read.table("id_conversion.txt", sep="\t", header=TRUE)
@@ -201,3 +258,4 @@ geneIDs = unique(c(geneIDTable[geneIDTable$RefSeq.mRNA..e.g..NM_001195597. %in%
 				geneIDTable[geneIDTable$Ensembl.Transcript.ID %in% 
 								geneAccs,]$EntrezGene.ID))
 testOutput = setRankAnalysis(ratCollection, geneIDs)
+write.graph(testOutput, "ratBrain.gml", format="gml")

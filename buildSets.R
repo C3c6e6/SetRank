@@ -10,8 +10,27 @@ library("igraph")
 "%u%" <- union
 "%d%" <- setdiff
 
+#TODO:
+# - remove referenceGenes option from getPrimarySetPValues and add it to 
+#   buildSetCollection.
+
 uniqueCount <- function(x) {
 	if (class(x) == "factor") length(levels(x)) else length(unique(x))
+}
+
+reactome2AnnotationTable <- function(organismName) {
+	pathways <- toTable(reactomePATHNAME2ID)
+	organismPathways = pathways[grep(organismName,pathways$path_name),]
+	organismPathways$path_name = sub(sprintf("^%s: ", organismName), "", 
+			organismPathways$path_name)
+	rownames(organismPathways) <- organismPathways$reactome_id
+	path2GeneID = as.list(reactomePATHID2EXTID)
+	nonEmptyPaths = rownames(organismPathways) %i% names(path2GeneID)
+	do.call(rbind, lapply(nonEmptyPaths, function(x) data.frame(
+								geneID=path2GeneID[[x]], 
+								termID=paste("REACTOME", x, sep=":"),
+								termName=organismPathways[x,]$path_name, 
+								dbName="Reactome", stringsAsFactors=FALSE)))
 }
 
 organismDBI2AnnotationTable <- function(annotationPackageName) {
@@ -58,7 +77,6 @@ expandWithTermOffspring <- function(subTable, tableSplit, offspringList) {
 	expandedTable = rbind(subTable, extension)
 	expandedTable[!is.na(expandedTable$geneID),]
 }
-
 
 buildSetCollection <- function(..., maxSetSize = 2000) {
 	annotationTable = do.call(rbind, list(...))
@@ -195,11 +213,11 @@ getSetPairStatistics <- function(row, selectedGenes, setCollection) {
 	type = "overlap"
     pIntersection = getSetPValue(intersection, selectedGenes, setCollection$g)
 	a$pDiff = getSetPValue(diffA, selectedGenes, setCollection$g)
-	a$pHetero = setHeterogeneityPValue(diffA, intersection, selectedGenes)
+	a$pHetero = setHeterogeneityPValue(diffA, setB, selectedGenes)
 	a$diffSize = length(diffA)
 	a$size = length(setA)
 	b$pDiff = getSetPValue(diffB, selectedGenes, setCollection$g)
-	b$pHetero = setHeterogeneityPValue(diffB, intersection, selectedGenes)
+	b$pHetero = setHeterogeneityPValue(diffB, setA, selectedGenes)
 	b$diffSize = length(diffB)
 	b$size = length(setB)
 	if (length(diffA) == 0 || length(diffB) == 0) {
@@ -236,14 +254,14 @@ getSetPairStatistics <- function(row, selectedGenes, setCollection) {
 			stringsAsFactors=FALSE)
 }
 
-setHeterogeneityPValue <- function(difference, intersection, selectedGenes) {
+setHeterogeneityPValue <- function(difference, otherSet, selectedGenes) {
 	differenceNotSelection = difference %d% selectedGenes
 	differenceSelection = difference %i% selectedGenes
-	intersectionNotSelection = intersection %d% selectedGenes
-	intersectionSelection = intersection %i% selectedGenes
+	otherSetNotSelection = otherSet %d% selectedGenes
+	otherSetSelection = otherSet %i% selectedGenes
 	fisher.test(rbind(
 					c(length(differenceNotSelection),length(differenceSelection)),
-					c(length(intersectionNotSelection),length(intersectionSelection))
+					c(length(otherSetNotSelection),length(otherSetSelection))
 			))$p.value
 }
 

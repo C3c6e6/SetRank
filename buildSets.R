@@ -10,10 +10,6 @@ library("igraph")
 "%u%" <- union
 "%d%" <- setdiff
 
-#TODO:
-# - remove referenceGenes option from getPrimarySetPValues and add it to 
-#   buildSetCollection.
-
 uniqueCount <- function(x) {
 	if (class(x) == "factor") length(levels(x)) else length(unique(x))
 }
@@ -78,18 +74,20 @@ expandWithTermOffspring <- function(subTable, tableSplit, offspringList) {
 	expandedTable[!is.na(expandedTable$geneID),]
 }
 
-buildSetCollection <- function(..., maxSetSize = 2000) {
+buildSetCollection <- function(..., referenceSet = NULL, maxSetSize = 2000) {
 	annotationTable = do.call(rbind, list(...))
-	collection = list(maxSetSize = maxSetSize)
+	collection = list(maxSetSize = maxSetSize, referenceSet=referenceSet)
 	collection$sets = by(annotationTable, annotationTable[,"termID"], 
 			function(x) {
 				geneSet = unique(as.character(x[,"geneID"]))
+				if (!is.null(referenceSet)) geneSet = geneSet %i% referenceSet
 				attr(geneSet, "ID") <- unique(as.character(x[,"termID"]))
 				attr(geneSet, "name") <- unique(as.character(x[,"termName"]))
 				attr(geneSet, "db") <- unique(as.character(x[,"dbName"]))
 				geneSet
 			})
-	collection$g = uniqueCount(annotationTable$geneID)
+	collection$g = if (is.null(referenceSet)) 
+				uniqueCount(annotationTable$geneID) else length(referenceSet)
 	setSizes = sapply(collection$sets, length)
 	collection$bigSets = names(setSizes[setSizes > maxSetSize])
 	message(uniqueCount(annotationTable$dbName), " gene set DBs, ", 
@@ -150,18 +148,14 @@ setRankAnalysis <- function(setCollection, selectedGenes, setPCutoff = 0.01,
 			" gene sets.")
 	setNet = graph.data.frame(edgeTable, directed=TRUE, vertices=vertexTable)
 	setNet - toDelete
+	setRank = page.rank(setNet)
+	V(setNet)[names(setRank$vector)]$setRank = setRank$vector
+	setNet
 }
 
-getPrimarySetPValues <- function(setCollection, selectedGenes, referenceGenes = NA) {
+getPrimarySetPValues <- function(setCollection, selectedGenes) {
 	selectedGenes = as.character(selectedGenes)
-	if (!is.na(referenceGenes)) {
-		referenceGenes = as.set(as.character(referenceGenes))
-		setCollection$sets = lapply(setCollection$sets, intersect, 
-				referenceGenes)
-		g = length(referenceGenes)
-	} else {
-		g = setCollection$g
-	}
+	g = setCollection$g
 	pValues = sapply(setCollection$sets, getSetPValue, selectedGenes, g)
 	pValues[setCollection$bigSets] = 1
 	pValues
@@ -264,19 +258,3 @@ setHeterogeneityPValue <- function(difference, otherSet, selectedGenes) {
 					c(length(otherSetNotSelection),length(otherSetSelection))
 			))$p.value
 }
-
-
-#ratTable = organismDBI2AnnotationTable("Rattus.norvegicus")
-#load("ratTable.Rda")
-#ratCollection=buildSetCollection(ratTable, maxSetSize = 500)
-
-load("ratCollection.Rda")
-conversionTable = read.table("id_conversion.txt", sep="\t", header=TRUE)
-geneIDTable = conversionTable[!is.na(conversionTable$EntrezGene.ID),]
-geneAccs = readLines("gene_acc.lst")
-geneIDs = unique(c(geneIDTable[geneIDTable$RefSeq.mRNA..e.g..NM_001195597. %in% 
-								geneAccs,]$EntrezGene.ID, 
-				geneIDTable[geneIDTable$Ensembl.Transcript.ID %in% 
-								geneAccs,]$EntrezGene.ID))
-testOutput = setRankAnalysis(ratCollection, geneIDs)
-write.graph(testOutput, "ratBrain.gml", format="gml")

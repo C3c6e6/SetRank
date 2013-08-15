@@ -3,7 +3,7 @@
 # Author: cesim
 ###############################################################################
 library("reactome.db")
-library("go.db")
+library("GO.db")
 library("igraph")
 
 "%i%" <- intersect
@@ -76,18 +76,20 @@ expandWithTermOffspring <- function(subTable, tableSplit, offspringList) {
 
 buildSetCollection <- function(..., referenceSet = NULL, maxSetSize = 2000) {
 	annotationTable = do.call(rbind, list(...))
+	if	(!is.null(referenceSet)) {
+		annotationTable = 
+				annotationTable[annotationTable$geneID %in% referenceSet,]
+	}
 	collection = list(maxSetSize = maxSetSize, referenceSet=referenceSet)
 	collection$sets = by(annotationTable, annotationTable[,"termID"], 
 			function(x) {
 				geneSet = unique(as.character(x[,"geneID"]))
-				if (!is.null(referenceSet)) geneSet = geneSet %i% referenceSet
 				attr(geneSet, "ID") <- unique(as.character(x[,"termID"]))
 				attr(geneSet, "name") <- unique(as.character(x[,"termName"]))
 				attr(geneSet, "db") <- unique(as.character(x[,"dbName"]))
 				geneSet
 			})
-	collection$g = if (is.null(referenceSet)) 
-				uniqueCount(annotationTable$geneID) else length(referenceSet)
+	collection$g =  uniqueCount(annotationTable$geneID)
 	setSizes = sapply(collection$sets, length)
 	collection$bigSets = names(setSizes[setSizes > maxSetSize])
 	message(uniqueCount(annotationTable$dbName), " gene set DBs, ", 
@@ -147,10 +149,11 @@ setRankAnalysis <- function(setCollection, selectedGenes, setPCutoff = 0.01,
 	message("discarded ", length(toDelete), " out of ", nrow(vertexTable), 
 			" gene sets.")
 	setNet = graph.data.frame(edgeTable, directed=TRUE, vertices=vertexTable)
-	setNet - toDelete
-	setRank = page.rank(setNet)
-	V(setNet)[names(setRank$vector)]$setRank = setRank$vector
-	setNet
+	setNet = setNet - toDelete
+	subsetEdges = which(E(setNet)$type == "subset")
+	setRank = page.rank(setNet - E(setNet)[subsetEdges])
+	set.vertex.attribute(setNet, "setRank", index=names(setRank$vector), 
+			value=setRank$vector)
 }
 
 getPrimarySetPValues <- function(setCollection, selectedGenes) {
@@ -186,10 +189,13 @@ buildEdgeTable <- function(setCollection, setPValues, selectedGenes,
 					edgeTable$source_pDiff > setPCutoff,]$discardSource = TRUE
 	edgeTable[edgeTable$sink_pHetero <= heteroPCutoff & 
 					edgeTable$sink_pDiff > setPCutoff,]$discardSink = TRUE
-	edgeTable[edgeTable$discardSource & 
-					edgeTable$discardSink,]$type = "intersection"
-    edgeTable[edgeTable$type == "intersection",]$discardSource = FALSE
-	edgeTable[edgeTable$type == "intersection",]$discardSink = FALSE
+	if (any(edgeTable$discardSource & edgeTable$discardSink)) {
+		edgeTable[edgeTable$discardSource & 
+						edgeTable$discardSink,]$type = "intersection"
+		edgeTable[edgeTable$type == "intersection",]$discardSource = FALSE
+		edgeTable[edgeTable$type == "intersection",]$discardSink = FALSE
+
+	}
 	edgeTable
 }
 

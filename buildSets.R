@@ -79,6 +79,8 @@ buildSetCollection <- function(..., referenceSet = NULL, maxSetSize = 2000) {
 	if	(!is.null(referenceSet)) {
 		annotationTable = 
 				annotationTable[annotationTable$geneID %in% referenceSet,]
+	} else {
+		referenceSet = unique(as.character(annotationTable$geneID))
 	}
 	collection = list(maxSetSize = maxSetSize, referenceSet=referenceSet)
 	collection$sets = by(annotationTable, annotationTable[,"termID"], 
@@ -89,7 +91,7 @@ buildSetCollection <- function(..., referenceSet = NULL, maxSetSize = 2000) {
 				attr(geneSet, "db") <- unique(as.character(x[,"dbName"]))
 				geneSet
 			})
-	collection$g =  uniqueCount(annotationTable$geneID)
+	collection$g =  length(referenceSet)
 	setSizes = sapply(collection$sets, length)
 	collection$bigSets = names(setSizes[setSizes > maxSetSize])
 	message(uniqueCount(annotationTable$dbName), " gene set DBs, ", 
@@ -103,27 +105,55 @@ buildSetCollection <- function(..., referenceSet = NULL, maxSetSize = 2000) {
 	collection
 }
 
-
 getSignificantIntersections <- function(collectionSets, annotationTable, g, 
 		pValueCutoff, bigSets) {
-	setsPerGene = by(annotationTable, annotationTable$geneID, 
-			function(x) as.character(x$termID) %d% bigSets)
-	setCount = unlist(lapply(setsPerGene, length))
+	setIDs = names(collectionSets)
+	setIndicesPerGene = by(annotationTable, annotationTable$geneID, 
+			function(x) which(setIDs %in% 
+								(as.character(x$termID) %d% bigSets)))
+	setCount = unlist(lapply(setIndicesPerGene, length))
 	geneOrder = names(sort(setCount[setCount > 1], decreasing=TRUE))
-	pValueFrame = do.call(rbind, lapply(setsPerGene[geneOrder], 
-					function(x) t(combn(x, 2)) ))
-	pValueFrame = as.data.frame(unique(pValueFrame, MARGIN=1))
-	colnames(pValueFrame) = c("setA", "setB")
-	message(nrow(pValueFrame), " intersections to test...", appendLF=FALSE)
-	pValueFrame$pValue = apply(pValueFrame, 1, getIntersectionPValue, collectionSets, g)
-	pValueFrame = pValueFrame[pValueFrame$pValue <= pValueCutoff,]
+	intersectionsPerGene = lapply(setIndicesPerGene[geneOrder],
+			function(x) apply(t(combn(x, 2)), 1, pack, length(setIDs)))
+	intersectionIndices = unlist(intersectionsPerGene, use.names=FALSE)
+	intersectionIndices = unique(intersectionIndices)
+	message(length(intersectionIndices), " intersections to test...", appendLF=FALSE)
+	intersectionPValues = sapply(intersectionIndices, getIntersectionPValue, collectionSets, g)
+	significantIndices = which(intersectionPValues <= pValueCutoff)
+	pValueFrame = as.data.frame(do.call(rbind, 
+					lapply(intersectionIndices[significantIndices], 
+					function(x)	setIDs[unpack(x, length(setIDs))])))
+	colnames(pValueFrame) <- c("setA", "setB")
+	pValueFrame$pValue = intersectionPValues[significantIndices]
 	message(nrow(pValueFrame), " intersections significant")
 	pValueFrame
 }
 
-getIntersectionPValue <-function(setIDPair, setCollection, g) {
-	setA = setCollection[[setIDPair[1]]]
-	setB = setCollection[[setIDPair[2]]]
+pack <- function(indexPair, n) {
+	if (indexPair[1] > n || indexPair[2] > n) stop("Index higher than n")
+	if (indexPair[1] > indexPair[2]) {
+		a = indexPair[2]
+		b = indexPair[1]
+	} else {
+		a = indexPair[1]
+		b = indexPair[2]
+	}
+	(a-1)*(n-1)+(b-1)
+}
+
+unpack <- function(packed, n) {
+	n_ = n-1
+	a = ceiling(packed/n_)
+	r = (packed %% n_)
+	b = if (r == 0) n else r+1
+	if (a >= b) stop("Invalid packed value")
+	c(a,b)
+}
+
+getIntersectionPValue <-function(intersectionIndex, setCollection, g) {
+	setIndexPair = unpack(intersectionIndex, length(setCollection))
+	setA = setCollection[[setIndexPair[1]]]
+	setB = setCollection[[setIndexPair[2]]]
 	i = length(setA %i% setB)
 	m = length(setA)
 	n = length(setB)
@@ -136,6 +166,7 @@ intersectionTest <- function(g, m, n, i) {
 
 setRankAnalysis <- function(setCollection, selectedGenes, setPCutoff = 0.01, 
 		heteroPCutoff = setPCutoff) {
+	selectedGenes = selectedGenes %i% setCollection$referenceSet
 	pValues = getPrimarySetPValues(setCollection, selectedGenes)
 	edgeTable = buildEdgeTable(setCollection, pValues, selectedGenes, 
 			setPCutoff, heteroPCutoff)
@@ -199,6 +230,7 @@ buildEdgeTable <- function(setCollection, setPValues, selectedGenes,
 	edgeTable
 }
 
+
 getSetPairStatistics <- function(row, selectedGenes, setCollection) {
 	setIDA = row[1]
 	setIDB = row[2]
@@ -245,6 +277,7 @@ getSetPairStatistics <- function(row, selectedGenes, setCollection) {
 			source_ppHetero = -log10(source$pHetero), 
 			source_diffSize = source$diffSize, sink_pDiff = sink$pDiff, 
 			sink_ppDiff = -log10(sink$pDiff), sink_pHetero = sink$pHetero,
+			sink_ppHetero = -log10(sink$pHetero), 
 			sink_diffSize = sink$diffSize, 
 			deltaP = -log10(sink$pDiff) + log10(source$pDiff),
 			intersectionSize = length(intersection), 

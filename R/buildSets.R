@@ -11,8 +11,9 @@ uniqueCount <- function(x) {
 
 reactome2AnnotationTable <- function(organismName) {
 	pathways <- toTable(reactomePATHNAME2ID)
-	organismPathways = pathways[grep(organismName,pathways$path_name),]
-	organismPathways$path_name = sub(sprintf("^%s: ", organismName), "", 
+	searchPattern = sprintf("^\\s*%s\\s*:\\s*", organismName)
+	organismPathways = unique(pathways[grep(searchPattern,pathways$path_name),])
+	organismPathways$path_name = sub(searchPattern, "", 
 			organismPathways$path_name)
 	rownames(organismPathways) <- organismPathways$reactome_id
 	path2GeneID = as.list(reactomePATHID2EXTID)
@@ -57,7 +58,6 @@ organismDBI2AnnotationTable <- function(annotationPackageName) {
 
 expandWithTermOffspring <- function(subTable, tableSplit, offspringList) {
 	termID = unique(as.character(subTable$termID))
-	message(termID)
 	termName = unique(as.character(subTable$termName))
 	dbName = unique(as.character(subTable$dbName))
 	offspring = offspringList[[termID]] %i% names(tableSplit)

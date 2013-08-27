@@ -15,12 +15,19 @@ setRankAnalysis <- function(setCollection, selectedGenes, setPCutoff = 0.01,
 	vertexTable = data.frame(name=sapply(setCollection$sets, attr, "ID"), 
 			description = sapply(setCollection$sets, attr, "name"), 
 			database=sapply(setCollection$sets, attr, "db"),  pValue = pValues,
-			pp = -log10(pValues), size = sapply(setCollection$sets, length))
+			pp = -log10(pValues), size = sapply(setCollection$sets, length),
+			stringsAsFactors=FALSE)
 	vertexTable = vertexTable[vertexTable$pValue <= setPCutoff,]
 	message("discarded ", length(toDelete), " out of ", nrow(vertexTable), 
 			" gene sets.")
-	setNet = graph.data.frame(edgeTable, directed=TRUE, vertices=vertexTable)
-	setNet = setNet - toDelete
+	setNet = if (is.na(edgeTable[1,]$source)) {
+				add.vertices(graph.empty(), nrow(vertexTable),
+						attr=as.list(vertexTable))
+			} else {
+				graph.data.frame(edgeTable, directed=TRUE, 
+						vertices=vertexTable)
+			}
+	if (length(toDelete) > 0) setNet = setNet - toDelete
 	subsetEdges = which(E(setNet)$type == "subset")
 	setRank = page.rank(setNet - E(setNet)[subsetEdges])
 	set.vertex.attribute(setNet, "setRank", index=names(setRank$vector), 
@@ -52,14 +59,23 @@ buildEdgeTable <- function(setCollection, setPValues, selectedGenes,
 			function(x) (length(x %i% significantSetIDs) == 2))
 	intersectionTable = intersectionTable[intersectionsToTest,]
 	message(" - ", nrow(intersectionTable), " intersections to test.")
+	if (nrow(intersectionTable) == 0) {
+		return(data.frame(source=NA, sink=NA, type=NA))
+	}
 	edgeTable = do.call(rbind, apply(intersectionTable, 1, getSetPairStatistics, 
 					selectedGenes, setCollection))
 	edgeTable$discardSource = FALSE
 	edgeTable$discardSink = FALSE
-	edgeTable[edgeTable$source_pHetero <= heteroPCutoff & 
-					edgeTable$source_pDiff > setPCutoff,]$discardSource = TRUE
-	edgeTable[edgeTable$sink_pHetero <= heteroPCutoff & 
-					edgeTable$sink_pDiff > setPCutoff,]$discardSink = TRUE
+	discardSourceIndices = edgeTable$source_pHetero <= heteroPCutoff & 
+			edgeTable$source_pDiff > setPCutoff
+	if (any(discardSourceIndices)) {
+		edgeTable[discardSourceIndices,]$discardSource = TRUE
+	}
+	discardSourceIndices = edgeTable$sink_pHetero <= heteroPCutoff & 
+			edgeTable$sink_pDiff > setPCutoff
+	if (any(discardSourceIndices)) {
+		edgeTable[discardSourceIndices,]$discardSource = TRUE
+	}
 	if (any(edgeTable$discardSource & edgeTable$discardSink)) {
 		edgeTable[edgeTable$discardSource & 
 						edgeTable$discardSink,]$type = "intersection"

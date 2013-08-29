@@ -83,6 +83,7 @@ buildEdgeTable <- function(setCollection, setPValues, selectedGenes,
 		edgeTable[edgeTable$type == "intersection",]$discardSink = FALSE
 		
 	}
+	edgeTable = edgeTable[edgeTable$significantJaccard > 0,]
 	edgeTable
 }
 
@@ -93,6 +94,7 @@ getSetPairStatistics <- function(row, selectedGenes, setCollection) {
 	setA = setCollection$sets[[setIDA]]
 	setB = setCollection$sets[[setIDB]]
 	intersection = setA %i% setB
+	intersectionSignificant = length(intersection %i% selectedGenes)
 	a = list(id = setIDA)
 	b = list(id = setIDB)
 	unionSet = setA %u% setB
@@ -104,10 +106,12 @@ getSetPairStatistics <- function(row, selectedGenes, setCollection) {
 	a$pHetero = setHeterogeneityPValue(diffA, setB, selectedGenes)
 	a$diffSize = length(diffA)
 	a$size = length(setA)
+	a$diffSignificant = length(diffA %i% selectedGenes)
 	b$pDiff = getSetPValue(diffB, selectedGenes, setCollection$g)
 	b$pHetero = setHeterogeneityPValue(diffB, setA, selectedGenes)
 	b$diffSize = length(diffB)
 	b$size = length(setB)
+	b$diffSignificant = length(diffB %i% selectedGenes)
 	if (length(diffA) == 0 || length(diffB) == 0) {
 		type = "subset"
 		if (length(diffA) == 0) {
@@ -117,8 +121,8 @@ getSetPairStatistics <- function(row, selectedGenes, setCollection) {
 			source = b
 			sink = a
 		}
-		source$pDiff = 1
-		source$pHetero = 1
+		source$pDiff = 1.0
+		source$pHetero = 1.0
 	} else if (a$pDiff > b$pDiff) {
 		source = a
 		sink = b
@@ -127,23 +131,31 @@ getSetPairStatistics <- function(row, selectedGenes, setCollection) {
 		sink = a
 	}
 	jaccard = length(intersection)/length(unionSet)
+	significantJaccard = length(intersection %i% selectedGenes) /
+			length(unionSet %i% selectedGenes)
 	data.frame(source=source$id, sink=sink$id, type=type, 
 			source_pDiff = source$pDiff, source_ppDiff = -log10(source$pDiff), 
 			source_pHetero = source$pHetero, 
 			source_ppHetero = -log10(source$pHetero), 
-			source_diffSize = source$diffSize, sink_pDiff = sink$pDiff, 
-			sink_ppDiff = -log10(sink$pDiff), sink_pHetero = sink$pHetero,
-			sink_ppHetero = -log10(sink$pHetero), 
+			source_diffSize = source$diffSize, 
+			source_diffSignificant = source$diffSignificant, 
+			sink_pDiff = sink$pDiff, sink_ppDiff = -log10(sink$pDiff), 
+			sink_pHetero = sink$pHetero, sink_ppHetero = -log10(sink$pHetero),
 			sink_diffSize = sink$diffSize, 
+			sink_diffSignificant = sink$diffSignificant,
 			deltaP = -log10(sink$pDiff) + log10(source$pDiff),
 			intersectionSize = length(intersection), 
+			intersectionSignificant = intersectionSignificant,
 			pIntersection = pIntersection, 
 			ppIntersection = -log10(pIntersection), jaccard=jaccard, 
+			significantJaccard = significantJaccard,
 			intersectionSourceFraction = length(intersection)/source$size,  
 			stringsAsFactors=FALSE)
 }
 
-setHeterogeneityPValue <- function(difference, otherSet, selectedGenes) {
+setHeterogeneityPValue <- fisherTest
+
+fisherTest <- function(difference, otherSet, selectedGenes) {
 	differenceNotSelection = difference %d% selectedGenes
 	differenceSelection = difference %i% selectedGenes
 	otherSetNotSelection = otherSet %d% selectedGenes
@@ -152,5 +164,38 @@ setHeterogeneityPValue <- function(difference, otherSet, selectedGenes) {
 					c(length(differenceNotSelection),length(differenceSelection)),
 					c(length(otherSetNotSelection),length(otherSetSelection))
 			))$p.value
+}
+
+binomialIntervalTest <- function(difference, otherSet, selectedGenes) {
+	if (length(difference) == 0) {
+		return(1)
+	}
+	differenceSelection = difference %i% selectedGenes
+	otherSetSelection = otherSet %i% selectedGenes
+	diffInterval = binomialInterval(
+			length(differenceSelection)/length(difference), 
+			length(difference), 0.01)
+	otherInterval = binomialInterval(length(otherSetSelection)/length(otherSet),
+			length(otherSet), 0.01)
+	if ((diffInterval$upper > otherInterval$upper) && 
+			(diffInterval$lower <= otherInterval$upper)) {
+		return(1)
+	} else if ((otherInterval$upper > diffInterval$upper) && 
+			(otherInterval$lower <= diffInterval$upper)) {
+		return(1)
+	} else {
+		return(0)
+	}
+}
+
+binomialInterval <- function(p, n, alfa) {
+	z = qnorm(1-alfa/2)
+	term1 = 2*n*p + z^2
+	term2 = z * sqrt( z^2 - 1/n + 4*n*p*(1-p) + (4*p-2) ) + 1
+	denominator = 2 * (n + z^2)
+	lower = max(0, (term1-term2)/denominator)
+	term2 = z * sqrt( z^2 - 1/n + 4*n*p*(1-p) - (4*p-2) ) + 1
+	upper = min(1, (term1+term2)/denominator)
+	return(list(lower=lower, upper=upper))
 }
 

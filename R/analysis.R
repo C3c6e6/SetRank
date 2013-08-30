@@ -4,12 +4,11 @@
 ###############################################################################
 library("igraph")
 
-setRankAnalysis <- function(setCollection, selectedGenes, setPCutoff = 0.01, 
-		heteroPCutoff = setPCutoff) {
+setRankAnalysis <- function(setCollection, selectedGenes, setPCutoff = 0.01) {
 	selectedGenes = selectedGenes %i% setCollection$referenceSet
 	pValues = getPrimarySetPValues(setCollection, selectedGenes)
 	edgeTable = buildEdgeTable(setCollection, pValues, selectedGenes, 
-			setPCutoff, heteroPCutoff)
+			setPCutoff)
 	toDelete = unique(union(edgeTable[edgeTable$discardSource,]$source, 
 					edgeTable[edgeTable$discardSink,]$sink))
 	vertexTable = data.frame(name=sapply(setCollection$sets, attr, "ID"), 
@@ -17,6 +16,8 @@ setRankAnalysis <- function(setCollection, selectedGenes, setPCutoff = 0.01,
 			database=sapply(setCollection$sets, attr, "db"),  pValue = pValues,
 			pp = -log10(pValues), size = sapply(setCollection$sets, length),
 			stringsAsFactors=FALSE)
+	vertexTable$nSignificant = sapply(setCollection$sets, 
+			function(x) length(x %i% selectedGenes))
 	vertexTable = vertexTable[vertexTable$pValue <= setPCutoff,]
 	message("discarded ", length(toDelete), " out of ", nrow(vertexTable), 
 			" gene sets.")
@@ -51,7 +52,7 @@ getSetPValue <- function(geneSet, selectedGenes, g) {
 }
 
 buildEdgeTable <- function(setCollection, setPValues, selectedGenes, 
-		setPCutoff, heteroPCutoff) {
+		setPCutoff) {
 	significantSetIDs = names(setPValues[setPValues <= setPCutoff])
 	message(length(significantSetIDs), " significant sets", appendLF=FALSE)
 	intersectionTable = setCollection$intersections
@@ -66,22 +67,20 @@ buildEdgeTable <- function(setCollection, setPValues, selectedGenes,
 					selectedGenes, setCollection))
 	edgeTable$discardSource = FALSE
 	edgeTable$discardSink = FALSE
-	discardSourceIndices = edgeTable$source_pHetero <= heteroPCutoff & 
-			edgeTable$source_pDiff > setPCutoff
+	discardSourceIndices = edgeTable$source_pDiff > setPCutoff & 
+			edgeTable$type != "subset"
 	if (any(discardSourceIndices)) {
 		edgeTable[discardSourceIndices,]$discardSource = TRUE
 	}
-	discardSourceIndices = edgeTable$sink_pHetero <= heteroPCutoff & 
-			edgeTable$sink_pDiff > setPCutoff
-	if (any(discardSourceIndices)) {
-		edgeTable[discardSourceIndices,]$discardSource = TRUE
+	discardSinkIndices = edgeTable$sink_pDiff > setPCutoff
+	if (any(discardSinkIndices)) {
+		edgeTable[discardSinkIndices,]$discardSink = TRUE
 	}
 	if (any(edgeTable$discardSource & edgeTable$discardSink)) {
 		edgeTable[edgeTable$discardSource & 
 						edgeTable$discardSink,]$type = "intersection"
 		edgeTable[edgeTable$type == "intersection",]$discardSource = FALSE
 		edgeTable[edgeTable$type == "intersection",]$discardSink = FALSE
-		
 	}
 	edgeTable = edgeTable[edgeTable$significantJaccard > 0,]
 	edgeTable
@@ -95,22 +94,18 @@ getSetPairStatistics <- function(row, selectedGenes, setCollection) {
 	setB = setCollection$sets[[setIDB]]
 	intersection = setA %i% setB
 	intersectionSignificant = length(intersection %i% selectedGenes)
-	a = list(id = setIDA)
-	b = list(id = setIDB)
+	a = list(id = setIDA, size = length(setA))
+	b = list(id = setIDB, size = length(setB))
 	unionSet = setA %u% setB
 	diffA = setA %d% setB
 	diffB = setB %d% setA
 	type = "overlap"
 	pIntersection = getSetPValue(intersection, selectedGenes, setCollection$g)
 	a$pDiff = getSetPValue(diffA, selectedGenes, setCollection$g)
-	a$pHetero = setHeterogeneityPValue(diffA, setB, selectedGenes)
 	a$diffSize = length(diffA)
-	a$size = length(setA)
 	a$diffSignificant = length(diffA %i% selectedGenes)
 	b$pDiff = getSetPValue(diffB, selectedGenes, setCollection$g)
-	b$pHetero = setHeterogeneityPValue(diffB, setA, selectedGenes)
 	b$diffSize = length(diffB)
-	b$size = length(setB)
 	b$diffSignificant = length(diffB %i% selectedGenes)
 	if (length(diffA) == 0 || length(diffB) == 0) {
 		type = "subset"
@@ -122,7 +117,6 @@ getSetPairStatistics <- function(row, selectedGenes, setCollection) {
 			sink = a
 		}
 		source$pDiff = 1.0
-		source$pHetero = 1.0
 	} else if (a$pDiff > b$pDiff) {
 		source = a
 		sink = b
@@ -135,12 +129,9 @@ getSetPairStatistics <- function(row, selectedGenes, setCollection) {
 			length(unionSet %i% selectedGenes)
 	data.frame(source=source$id, sink=sink$id, type=type, 
 			source_pDiff = source$pDiff, source_ppDiff = -log10(source$pDiff), 
-			source_pHetero = source$pHetero, 
-			source_ppHetero = -log10(source$pHetero), 
 			source_diffSize = source$diffSize, 
 			source_diffSignificant = source$diffSignificant, 
 			sink_pDiff = sink$pDiff, sink_ppDiff = -log10(sink$pDiff), 
-			sink_pHetero = sink$pHetero, sink_ppHetero = -log10(sink$pHetero),
 			sink_diffSize = sink$diffSize, 
 			sink_diffSignificant = sink$diffSignificant,
 			deltaP = -log10(sink$pDiff) + log10(source$pDiff),
@@ -153,7 +144,7 @@ getSetPairStatistics <- function(row, selectedGenes, setCollection) {
 			stringsAsFactors=FALSE)
 }
 
-setHeterogeneityPValue <- fisherTest
+
 
 fisherTest <- function(difference, otherSet, selectedGenes) {
 	differenceNotSelection = difference %d% selectedGenes
@@ -199,3 +190,4 @@ binomialInterval <- function(p, n, alfa) {
 	return(list(lower=lower, upper=upper))
 }
 
+setHeterogeneityPValue <- fisherTest

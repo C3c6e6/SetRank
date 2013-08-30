@@ -9,8 +9,7 @@ setRankAnalysis <- function(setCollection, selectedGenes, setPCutoff = 0.01) {
 	pValues = getPrimarySetPValues(setCollection, selectedGenes)
 	edgeTable = buildEdgeTable(setCollection, pValues, selectedGenes, 
 			setPCutoff)
-	toDelete = unique(union(edgeTable[edgeTable$discardSource,]$source, 
-					edgeTable[edgeTable$discardSink,]$sink))
+	toDelete = getNodesToDelete(edgeTable)
 	vertexTable = data.frame(name=sapply(setCollection$sets, attr, "ID"), 
 			description = sapply(setCollection$sets, attr, "name"), 
 			database=sapply(setCollection$sets, attr, "db"),  pValue = pValues,
@@ -144,7 +143,27 @@ getSetPairStatistics <- function(row, selectedGenes, setCollection) {
 			stringsAsFactors=FALSE)
 }
 
-
+getNodesToDelete <- function(edgeTable) {
+	superSetsToDelete = edgeTable[edgeTable$type == "subset" & 
+					edgeTable$discardSink,]$sink
+	killTable = edgeTable[edgeTable$type == "overlap",]
+	while (TRUE) {
+		killTable = killTable[killTable$discardSource,]
+		allKillers = unique(killTable$sink)
+		allKilled = unique(killTable$source)
+		topKillers = allKillers %d% allKilled
+		intermediateKillers = 
+				unique(killTable[killTable$sink %in% topKillers,]$source) %i%
+				allKillers
+		invalidKills = killTable$sink %in% intermediateKillers
+		if (any(invalidKills)) {
+			killTable[invalidKills,]$discardSource = FALSE
+		} else {
+			break;
+		}
+	}
+	return(unique(superSetsToDelete %u% killTable$source))
+}
 
 fisherTest <- function(difference, otherSet, selectedGenes) {
 	differenceNotSelection = difference %d% selectedGenes

@@ -144,6 +144,7 @@ getSetPairStatistics <- function(row, selectedGenes, setCollection) {
 }
 
 getNodesToDelete <- function(edgeTable) {
+	if (is.na(edgeTable[1,]$sink)) {return(c())}
 	superSetsToDelete = edgeTable[edgeTable$type == "subset" & 
 					edgeTable$discardSink,]$sink
 	killTable = edgeTable[edgeTable$type == "overlap",]

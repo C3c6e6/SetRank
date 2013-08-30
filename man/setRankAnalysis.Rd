@@ -5,7 +5,7 @@
 }
 \description{Performs advanced gene set enrichment analysis on a set of gene.}
 \usage{
-setRankAnalysis(setCollection, selectedGenes, setPCutoff = 0.01, heteroPCutoff = setPCutoff)
+setRankAnalysis(setCollection, selectedGenes, setPCutoff = 0.01)
 }
 %- maybe also 'usage' for other objects documented here.
 \arguments{
@@ -18,9 +18,6 @@ setRankAnalysis(setCollection, selectedGenes, setPCutoff = 0.01, heteroPCutoff =
 }
   \item{setPCutoff}{The p-value cutoff to be used to consider a gene set
   significant. Recommended value: 0.01
-}
-  \item{heteroPCutoff}{The p-value cutoff to used to discover pairs of sets
-  with a heterogeneous distribution of significant genes.
 }
 }
 

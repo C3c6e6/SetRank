@@ -30,8 +30,9 @@ setRankAnalysis <- function(setCollection, selectedGenes, setPCutoff = 0.01) {
 	if (length(toDelete) > 0) setNet = setNet - toDelete
 	subsetEdges = which(E(setNet)$type == "subset")
 	setRank = page.rank(setNet - E(setNet)[subsetEdges])
-	set.vertex.attribute(setNet, "setRank", index=names(setRank$vector), 
+	setNet = set.vertex.attribute(setNet, "setRank", index=names(setRank$vector), 
 			value=setRank$vector)
+	addAdjustedPValues(setNet)
 }
 
 getPrimarySetPValues <- function(setCollection, selectedGenes) {
@@ -211,3 +212,27 @@ binomialInterval <- function(p, n, alfa) {
 }
 
 setHeterogeneityPValue <- fisherTest
+
+addAdjustedPValues <- function(setNet) {
+	edgeTable = get.data.frame(setNet, what="edges")
+	nodeTable = get.data.frame(setNet, what="vertices")
+	subsetTable = edgeTable[edgeTable$type == "subset",]
+	subsetMaxP = unlist(by(subsetTable, as.factor(subsetTable$to), 
+			function(x) max(x$sink_pDiff), simplify=FALSE))
+	overlapTable = edgeTable[edgeTable$type == "overlap",]
+	overlapMaxP = unlist(by(overlapTable, as.factor(overlapTable$from),
+			function(x) max(x$source_pDiff), simplify=FALSE))
+	nodeTable$correctedPValue = nodeTable$pValue
+	nodeTable[names(subsetMaxP),]$correctedPValue <- subsetMaxP
+	nodeTable[names(overlapMaxP),]$correctedPValue <- overlapMaxP
+	commonSets = names(overlapMaxP) %i% names(subsetMaxP)
+	nodeTable[commonSets,]$correctedPValue <- 
+			sapply(commonSets, function(x) max(subsetMaxP[x], overlapMaxP[x]))
+	nodeTable$correctedPValue = p.adjust(nodeTable$correctedPValue)
+	nodeTable$pp = -log10(nodeTable$correctedPValue)
+	setNet = set.vertex.attribute(setNet, "correctedPValue", index=rownames(nodeTable), 
+			value=nodeTable$correctedPValue)
+	setNet = set.vertex.attribute(setNet, "pp", index=rownames(nodeTable), 
+			value=nodeTable$pp)
+	return(setNet)
+}

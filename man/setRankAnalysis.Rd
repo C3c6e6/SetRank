@@ -3,9 +3,10 @@
 
 \title{Advanced gene set enrichment.
 }
-\description{Performs advanced gene set enrichment analysis on a set of gene.}
+\description{Performs advanced gene set enrichment analysis on a set of genes.}
 \usage{
-setRankAnalysis(setCollection, selectedGenes, setPCutoff = 0.01)
+setRankAnalysis(setCollection, selectedGenes, setPCutoff = 0.01, 
+	fdrCutoff = 0.05)
 }
 %- maybe also 'usage' for other objects documented here.
 \arguments{
@@ -19,6 +20,8 @@ setRankAnalysis(setCollection, selectedGenes, setPCutoff = 0.01)
   \item{setPCutoff}{The p-value cutoff to be used to consider a gene set
   significant. Recommended value: 0.01
 }
+  \item{fdrCutoff}{The cutoff to be applied on the corrected p-value after
+  false-positive sets have been removed.}
 }
 
 \value{An igraph object. Use the igraph \code{\link{get.data.frame}} function

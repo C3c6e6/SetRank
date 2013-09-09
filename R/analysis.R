@@ -4,7 +4,8 @@
 ###############################################################################
 library("igraph")
 
-setRankAnalysis <- function(setCollection, selectedGenes, setPCutoff = 0.01) {
+setRankAnalysis <- function(setCollection, selectedGenes, setPCutoff = 0.01, 
+		fdrCutoff = 0.05) {
 	selectedGenes = selectedGenes %i% setCollection$referenceSet
 	pValues = getPrimarySetPValues(setCollection, selectedGenes)
 	edgeTable = buildEdgeTable(setCollection, pValues, selectedGenes, 
@@ -32,7 +33,10 @@ setRankAnalysis <- function(setCollection, selectedGenes, setPCutoff = 0.01) {
 	setRank = page.rank(setNet - E(setNet)[subsetEdges])
 	setNet = set.vertex.attribute(setNet, "setRank", index=names(setRank$vector), 
 			value=setRank$vector)
-	addAdjustedPValues(setNet)
+	setNet = addAdjustedPValues(setNet)
+	notSignificant = which(V(setNet)$adjustPValue <= fdrCutoff)
+	message(length(notSignificant), " nodes removed after FDR correction.")
+	setNet - V(setNet)[notSignificant]
 }
 
 getPrimarySetPValues <- function(setCollection, selectedGenes) {
@@ -218,20 +222,24 @@ addAdjustedPValues <- function(setNet) {
 	nodeTable = get.data.frame(setNet, what="vertices")
 	subsetTable = edgeTable[edgeTable$type == "subset",]
 	subsetMaxP = unlist(by(subsetTable, as.factor(subsetTable$to), 
-			function(x) max(x$sink_pDiff), simplify=FALSE))
+					function(x) max(x$sink_pDiff), simplify=FALSE))
 	overlapTable = edgeTable[edgeTable$type == "overlap",]
 	overlapMaxP = unlist(by(overlapTable, as.factor(overlapTable$from),
-			function(x) max(x$source_pDiff), simplify=FALSE))
+					function(x) max(x$source_pDiff), simplify=FALSE))
 	nodeTable$correctedPValue = nodeTable$pValue
-	nodeTable[names(subsetMaxP),]$correctedPValue <- subsetMaxP
-	nodeTable[names(overlapMaxP),]$correctedPValue <- overlapMaxP
+	nodeTable[names(subsetMaxP),]$correctedPValue <- as.numeric(subsetMaxP)
+	nodeTable[names(overlapMaxP),]$correctedPValue <- as.numeric(overlapMaxP)
 	commonSets = names(overlapMaxP) %i% names(subsetMaxP)
-	nodeTable[commonSets,]$correctedPValue <- 
-			sapply(commonSets, function(x) max(subsetMaxP[x], overlapMaxP[x]))
-	nodeTable$correctedPValue = p.adjust(nodeTable$correctedPValue)
+	if (length(commonSets) > 0) {
+		nodeTable[commonSets,]$correctedPValue <- 
+				sapply(commonSets, function(x) max(subsetMaxP[x], overlapMaxP[x]))
+	}
+	nodeTable$adjustedPValue = p.adjust(nodeTable$correctedPValue)
 	nodeTable$pp = -log10(nodeTable$correctedPValue)
 	setNet = set.vertex.attribute(setNet, "correctedPValue", index=rownames(nodeTable), 
 			value=nodeTable$correctedPValue)
+	setNet = set.vertex.attribute(setNet, "adjustedPValue", index=rownames(nodeTable), 
+			value=nodeTable$adjustedPValue)
 	setNet = set.vertex.attribute(setNet, "pp", index=rownames(nodeTable), 
 			value=nodeTable$pp)
 	return(setNet)

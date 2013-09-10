@@ -34,7 +34,7 @@ setRankAnalysis <- function(setCollection, selectedGenes, setPCutoff = 0.01,
 	setNet = set.vertex.attribute(setNet, "setRank", index=names(setRank$vector), 
 			value=setRank$vector)
 	setNet = addAdjustedPValues(setNet)
-	notSignificant = which(V(setNet)$adjustedPValue <= fdrCutoff)
+	notSignificant = which(V(setNet)$adjustedPValue > fdrCutoff)
 	message(length(notSignificant), " nodes removed after FDR correction.")
 	setNet - V(setNet)[notSignificant]
 }

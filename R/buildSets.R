@@ -15,7 +15,7 @@ reactome2AnnotationTable <- function(organismName) {
 	organismPathways = unique(pathways[grep(searchPattern,pathways$path_name),])
 	organismPathways$path_name = sub(searchPattern, "", 
 			organismPathways$path_name)
-	rownames(organismPathways) <- organismPathways$reactome_id
+	rownames(organismPathways) <- organismPathways$DB_ID
 	path2GeneID = as.list(reactomePATHID2EXTID)
 	nonEmptyPaths = rownames(organismPathways) %i% names(path2GeneID)
 	do.call(rbind, lapply(nonEmptyPaths, function(x) data.frame(

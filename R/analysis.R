@@ -218,15 +218,16 @@ binomialInterval <- function(p, n, alfa) {
 setHeterogeneityPValue <- fisherTest
 
 addAdjustedPValues <- function(setNet) {
-	edgeTable = get.data.frame(setNet, what="edges")
-	if (nrow(edgeTable) == 0) {
+	if (vcount(setNet) == 0) {
 		return(setNet)
 	}
+	edgeTable = get.data.frame(setNet, what="edges")
 	nodeTable = get.data.frame(setNet, what="vertices")
 	nodeTable$correctedPValue = nodeTable$pValue
-	correctedPValues = getCorrectedPValues(edgeTable)
-	nodeTable$correctedPValue = nodeTable$pValue
-	nodeTable[names(correctedPValues),]$correctedPValue = correctedPValues
+	if (ecount(setNet) > 0) {
+		correctedPValues = getCorrectedPValues(edgeTable)
+		nodeTable[names(correctedPValues),]$correctedPValue = correctedPValues
+	}
 	nodeTable$adjustedPValue = p.adjust(nodeTable$correctedPValue)
 	nodeTable$pp = -log10(nodeTable$correctedPValue)
 	setNet = set.vertex.attribute(setNet, "correctedPValue", 

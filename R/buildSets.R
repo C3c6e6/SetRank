@@ -84,36 +84,41 @@ buildSetCollection <- function(..., referenceSet = NULL, maxSetSize = 2000) {
 				attr(geneSet, "ID") <- unique(as.character(x[,"termID"]))
 				attr(geneSet, "name") <- unique(as.character(x[,"termName"]))
 				attr(geneSet, "db") <- unique(as.character(x[,"dbName"]))
+				attr(geneSet, "description") <- 
+						unique(as.character(x[,"description"]))
 				geneSet
 			})
+	collection$sets[sapply(collection$sets, is.null)] = NULL
 	collection$g =  length(referenceSet)
-	setSizes = sapply(collection$sets, length)
-	collection$bigSets = names(setSizes[setSizes > maxSetSize])
+	collection$bigSets = sapply(collection$sets, length) > maxSetSize
 	message(uniqueCount(annotationTable$dbName), " gene set DBs, ", 
 			length(collection$sets), " initial gene sets, ", 
-			length(collection$sets) - length(collection$bigSets), 
+			length(collection$sets) - length(which(collection$bigSets)), 
 			" sets remaining and ", collection$g, " genes in collection")
 	collection$intersection.p.cutoff = 0.01
 	collection$intersections = getSignificantIntersections(collection$sets, 
 			annotationTable, collection$g, collection$intersection.p.cutoff,
 			collection$bigSets)
+	message("Pre-calculating critical Fisher-test values...")
+	collection$iMatrix = fisherCriticalValues(collection$g, maxSetSize, 0.05)
 	collection
 }
 
 getSignificantIntersections <- function(collectionSets, annotationTable, g, 
 		pValueCutoff, bigSets) {
-	setIDs = names(collectionSets)
+	setIDs = names(collectionSets[!bigSets])
 	setIndicesPerGene = by(annotationTable, annotationTable$geneID, 
-			function(x) which(setIDs %in% 
-								(as.character(x$termID) %d% bigSets)))
+			function(x) which(setIDs %in% as.character(x$termID)))
 	setCount = unlist(lapply(setIndicesPerGene, length))
-	geneOrder = names(sort(setCount[setCount > 1], decreasing=TRUE))
+	geneOrder = names(sort(setCount[(setCount > 1)], decreasing=TRUE))
 	intersectionsPerGene = lapply(setIndicesPerGene[geneOrder],
 			function(x) apply(t(combn(x, 2)), 1, pack, length(setIDs)))
 	intersectionIndices = unlist(intersectionsPerGene, use.names=FALSE)
 	intersectionIndices = unique(intersectionIndices)
-	message(length(intersectionIndices), " intersections to test...", appendLF=FALSE)
-	intersectionPValues = sapply(intersectionIndices, getIntersectionPValue, collectionSets, g)
+	message(length(intersectionIndices), " intersections to test...", 
+			appendLF=FALSE)
+	intersectionPValues = sapply(intersectionIndices, getIntersectionPValue,
+			collectionSets[!bigSets], g)
 	significantIndices = which(intersectionPValues <= pValueCutoff)
 	pValueFrame = as.data.frame(do.call(rbind, 
 					lapply(intersectionIndices[significantIndices], 
@@ -158,4 +163,17 @@ getIntersectionPValue <-function(intersectionIndex, setCollection, g) {
 intersectionTest <- function(g, m, n, i) {
 	fisher.test(rbind(c(i, n-i), c(m, g-(m+n-i))), alternative="greater")
 }
+
+fisherCriticalValues <- function(g,maxSize,criticalP) {
+	do.call(rbind, lapply(1:(g-1), function(s) {
+						sapply(1:maxSize, minimalI, s, g, criticalP)
+					}))
+}
+
+minimalI <- function(m,s,g, maximalP) {
+	iVector=min(s,m):0
+	pValues = rev(cumsum(dhyper(s-iVector,g-m,m,s)))
+	minimalI = which(pValues < maximalP)[1] - 1
+}
+
 

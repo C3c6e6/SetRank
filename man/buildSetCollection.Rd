@@ -93,11 +93,11 @@ See also \code{\link{organismDBI2AnnotationTable}} and
 \examples{
 #Create a random annotation table and build a set collection from it
 randomAnnotation = data.frame(
-    geneID = as.character(sample(5000, 50000, replace=TRUE)),
-    termID = paste("random", sample(100, 50000, replace=TRUE), sep=":"),
-    termName = "random pathway",
+    geneID = as.character(sample(5000, 20000, replace=TRUE)),
+    termID = paste("random", sample(200, 20000, replace=TRUE), sep=":"),
+    termName = "random pathway", description="utter randomness",
     dbName = "random")
-randomCollection = buildSetCollection(randomAnnotation,maxSetSize=500)
+randomCollection = buildSetCollection(randomAnnotation, maxSetSize=200)
 }
 % Add one or more standard keywords, see file 'KEYWORDS' in the
 % R documentation directory.

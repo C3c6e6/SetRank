@@ -57,10 +57,10 @@ randomCollection = buildSetCollection(randomAnnotation, maxSetSize=200)
 
 #Create a set of selectedGenes by combining all genes from 10 gene sets with
 #1000 random genes and then selecting 2000 from that list.
-setSample = sample(names(randomCollection$sets), 10)
+setSample = sample(names(randomCollection$sets), 20)
 selectedGenes = unique(sample(c(unlist(randomCollection$sets[setSample], 
 				use.names=FALSE), sample(levels(randomAnnotation$geneID), 
-				500)), 2000))
+				500)), 500))
 #Perform the gene set enrichment analysis
 results = setRankAnalysis(selectedGenes, randomCollection, FALSE)
 

@@ -7,7 +7,7 @@ library("igraph")
 setRankAnalysis <- function(geneIDs, setCollection, use.ranks = TRUE,
 		setPCutoff = 0.01, fdrCutoff = 0.05) {
 	testSet = if (use.ranks) as.RankedTestSet(geneIDs, setCollection) else
-				as.UnrankedTestSet(geneIDs)
+				as.UnrankedTestSet(geneIDs, setCollection)
 	message(Sys.time(), " - calculating primary set p-values")
 	pValues = getPrimarySetPValues(testSet, setCollection)
 	edgeTable = buildEdgeTable(testSet, setCollection, pValues,	setPCutoff)
@@ -143,7 +143,6 @@ getSetPairStatistics_base <- function(row, testSet, setCollection) {
 	setA = setCollection$sets[[setIDA]]
 	setB = setCollection$sets[[setIDB]]
 	intersection = setA %i% setB
-#	intersectionSignificant = length(intersection %i% testSet)
 	a = list(id = setIDA, size = length(setA))
 	b = list(id = setIDB, size = length(setB))
 	unionSet = setA %u% setB
@@ -153,10 +152,8 @@ getSetPairStatistics_base <- function(row, testSet, setCollection) {
 	pIntersection = getSetPValue(intersection, testSet, setCollection)
 	a$pDiff = getSetPValue(diffA, testSet, setCollection)
 	a$diffSize = length(diffA)
-#	a$diffSignificant = length(diffA %i% testSet)
 	b$pDiff = getSetPValue(diffB, testSet, setCollection)
 	b$diffSize = length(diffB)
-#	b$diffSignificant = length(diffB %i% testSet)
 	if (length(diffA) == 0 || length(diffB) == 0) {
 		type = "subset"
 		if (length(diffA) == 0) {
@@ -230,17 +227,6 @@ getNodesToDelete <- function(edgeTable) {
 	return(unique(superSetsToDelete %u% killTable$source))
 }
 
-setHeterogeneityPValue <- function(difference, otherSet, selectedGenes) {
-	differenceNotSelection = difference %d% selectedGenes
-	differenceSelection = difference %i% selectedGenes
-	otherSetNotSelection = otherSet %d% selectedGenes
-	otherSetSelection = otherSet %i% selectedGenes
-	fisher.test(rbind(
-					c(length(differenceNotSelection),length(differenceSelection)),
-					c(length(otherSetNotSelection),length(otherSetSelection))
-			))$p.value
-}
-
 addAdjustedPValues <- function(setNet) {
 	if (vcount(setNet) == 0) {
 		return(setNet)
@@ -255,11 +241,6 @@ addAdjustedPValues <- function(setNet) {
 	nodeTable$adjustedPValue = p.adjust(nodeTable$correctedPValue)
 	nodeTable$pp = -log10(nodeTable$correctedPValue)
 	setNet = graph.data.frame(edgeTable, directed=TRUE, vertices=nodeTable)
-#	setNet = set.vertex.attribute(setNet, "correctedPValue", 
-#			value=nodeTable$correctedPValue)
-#	setNet = set.vertex.attribute(setNet, "adjustedPValue", 
-#			value=nodeTable$adjustedPValue)
-#	setNet = set.vertex.attribute(setNet, "pp", value=nodeTable$pp)
 	return(setNet)
 }
 

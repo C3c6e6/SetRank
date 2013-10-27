@@ -1,3 +1,5 @@
 export(reactome2AnnotationTable, organismDBI2AnnotationTable, 
 	buildSetCollection, setRankAnalysis)
+S3method(getSetPValue, RankedTestSet)
+S3method(getSetPValue, UnrankedTestSet)
 import(AnnotationDbi, reactome.db, igraph)

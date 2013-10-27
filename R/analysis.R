@@ -190,7 +190,7 @@ getSetPairStatistics.RankedTestSet <- function(row, testSet, setCollection) {
 	stats
 }
 
-getSetPairStatistics.UnrankedSet <- function(row, testSet, setCollection) {
+getSetPairStatistics.UnrankedTestSet <- function(row, testSet, setCollection) {
 	stats = getSetPairStatistics_base(row, testSet, setCollection)
 	source = setCollection$sets[[stats$soure]]
 	sink = setCollection$sets[[stats$sink]]

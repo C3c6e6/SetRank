@@ -117,8 +117,8 @@ getSignificantIntersections <- function(collectionSets, annotationTable, g,
 	intersectionIndices = unique(intersectionIndices)
 	message(length(intersectionIndices), " intersections to test...", 
 			appendLF=FALSE)
-	intersectionPValues = sapply(intersectionIndices, getIntersectionPValue,
-			collectionSets[!bigSets], g)
+	intersectionPValues = unlist(mclapply(intersectionIndices, 
+					getIntersectionPValue, collectionSets[!bigSets], g))
 	significantIndices = which(intersectionPValues <= pValueCutoff)
 	pValueFrame = as.data.frame(do.call(rbind, 
 					lapply(intersectionIndices[significantIndices], 
@@ -165,7 +165,7 @@ intersectionTest <- function(g, m, n, i) {
 }
 
 fisherCriticalValues <- function(g,maxSize,criticalP) {
-	do.call(rbind, lapply(1:(g-1), function(s) {
+	do.call(rbind, mclapply(1:(g-1), function(s) {
 						sapply(1:maxSize, minimalI, s, g, criticalP)
 					}))
 }

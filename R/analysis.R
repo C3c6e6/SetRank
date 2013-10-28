@@ -63,8 +63,9 @@ getPrimarySetPValues <- function(testSet, setCollection) {
 	pValues = rep(1, length(setCollection$sets))
 	names(pValues) <- names(setCollection$sets)
 	smallSetIndices = !setCollection$bigSets
-	pValues[smallSetIndices] = sapply(setCollection$sets[smallSetIndices], 
-			getSetPValue, testSet, setCollection)
+	pValues[smallSetIndices] = 
+			unlist(mclapply(setCollection$sets[smallSetIndices], getSetPValue,
+							testSet, setCollection))
 	pValues	
 }
 
@@ -104,14 +105,15 @@ buildEdgeTable  <- function(testSet, setCollection, setPValues, setPCutoff) {
 	intersectionTable = setCollection$intersections
 	intersectionsToTest =  apply(intersectionTable, 1, 
 			function(x) (length(x %i% significantSetIDs) == 2))
-	intersectionTable = intersectionTable[intersectionsToTest,]
-	message(Sys.time(), " - ", nrow(intersectionTable), 
+	intersectionList = apply(intersectionTable[intersectionsToTest,], 1, 
+			as.list)
+	message(Sys.time(), " - ", length(intersectionList), 1,
 			" intersections to test.")
-	if (nrow(intersectionTable) == 0) {
+	if (length(intersectionList) == 0) {
 		return(data.frame(source=NA, sink=NA, type=NA))
 	}
-	edgeTable = do.call(rbind, apply(intersectionTable, 1, getSetPairStatistics, 
-					testSet, setCollection))
+	edgeTable = do.call(rbind, mclapply(intersectionList, 
+					getSetPairStatistics, testSet, setCollection))
 	message(Sys.time(), " - edge table constructed.")
 	edgeTable$discardSource = FALSE
 	edgeTable$discardSink = FALSE
@@ -138,8 +140,8 @@ getSetPairStatistics <- function(row, testSet, setCollection)
 	UseMethod("getSetPairStatistics", testSet)
 
 getSetPairStatistics_base <- function(row, testSet, setCollection) {
-	setIDA = row[1]
-	setIDB = row[2]
+	setIDA = row$setA
+	setIDB = row$setB
 	setA = setCollection$sets[[setIDA]]
 	setB = setCollection$sets[[setIDB]]
 	intersection = setA %i% setB
@@ -264,3 +266,4 @@ getCorrectedPValues <- function(edgeTable) {
 	rownames(maxPTable) <- setIDs
 	return(apply(maxPTable, 1, max, na.rm=TRUE))
 }
+

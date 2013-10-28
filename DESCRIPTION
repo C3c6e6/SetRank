@@ -1,11 +1,11 @@
 Package: SetRank
 Type: Package
 Title: Advanced Gene Set Enrichment Analysis
-Version: 0.4.3
+Version: 0.4.4
 Date: 2013-08-19
 Author: Cedric Simillion
 Maintainer: Cedric Simillion <cedric.simillion@dkf.unibe.ch>
 Description: The SetRank package implements an algorithm to conduct advanced
 	gene set enrichment analysis on the results of genomics experiments.
 License: GPL-3
-Depends: igraph, Homo.sapiens, GO.db, reactome.db, AnnotationDbi
+Depends: igraph, Homo.sapiens, GO.db, reactome.db, AnnotationDbi, multicore

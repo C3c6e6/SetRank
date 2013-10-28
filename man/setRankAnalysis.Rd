@@ -47,6 +47,7 @@ Cedric Simillion
 }
 
 \examples{
+options(cores=2)
 #Create a random annotation table and build a set collection from it
 randomAnnotation = data.frame(
     geneID = as.character(sample(5000, 20000, replace=TRUE)),

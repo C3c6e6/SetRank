@@ -11,34 +11,21 @@ setRankAnalysis <- function(geneIDs, setCollection, use.ranks = TRUE,
 	message(Sys.time(), " - calculating primary set p-values")
 	pValues = getPrimarySetPValues(testSet, setCollection)
 	edgeTable = buildEdgeTable(testSet, setCollection, pValues,	setPCutoff)
+	setNet = buildSetNet(edgeTable, setCollection, testSet, pValues, 
+			setPCutoff)
+	initialNodes = vcount(setNet)
+	message(Sys.time(), " - 1st round of node removal")
 	toDelete = getNodesToDelete(edgeTable)
-	vertexTable = data.frame(name=sapply(setCollection$sets, attr, "ID"), 
-			description = sapply(setCollection$sets, attr, "name"), 
-			database=sapply(setCollection$sets, attr, "db"),  pValue = pValues,
-			pp = -log10(pValues), size = sapply(setCollection$sets, length),
-			stringsAsFactors=FALSE)
-	if (use.ranks) {
-		vertexTable$nSignificant = sapply(setCollection$sets, 
-				function(x) length(x %i% testSet))
-	}
-	vertexTable = vertexTable[vertexTable$pValue <= setPCutoff,]
-	message(Sys.time(), " discarded ", length(toDelete), " out of ", 
-			nrow(vertexTable), " gene sets.")
-	setNet = if (is.na(edgeTable[1,]$source)) {
-				add.vertices(graph.empty(), nrow(vertexTable),
-						attr=as.list(vertexTable))
-			} else {
-				graph.data.frame(edgeTable, directed=TRUE, 
-						vertices=vertexTable)
-			}
 	if (length(toDelete) > 0) setNet = setNet - toDelete
-	subsetEdges = which(E(setNet)$type == "subset")
-	setRank = page.rank(setNet - E(setNet)[subsetEdges])
-	setNet = set.vertex.attribute(setNet, "setRank", index=names(setRank$vector), 
-			value=setRank$vector)
+	message(Sys.time(), " - calculating SetRank values")
+	setNet = calculateSetRank(setNet)
+	message(Sys.time(), " - secondary delete")
+	setNet = sinkDelete(setNet, setCollection, setPCutoff, testSet)
+	message(Sys.time(), " discarded ", initialNodes-vcount(setNet), " out of ", 
+			initialNodes, " gene sets.")
 	setNet = set.graph.attribute(setNet, "analysis", 
 			if (use.ranks) "ranked" else "unranked")
-	setNet = addAdjustedPValues(setNet)
+	setNet = pAdjustAndCorrect(setNet)
 	notSignificant = which(V(setNet)$adjustedPValue > fdrCutoff)
 	message(length(notSignificant), " gene sets removed after FDR correction.")
 	setNet - V(setNet)[notSignificant]
@@ -229,7 +216,27 @@ getNodesToDelete <- function(edgeTable) {
 	return(unique(superSetsToDelete %u% killTable$source))
 }
 
-addAdjustedPValues <- function(setNet) {
+buildSetNet <- function(edgeTable, setCollection, testSet, pValues, setPCutoff)
+{
+	vertexTable = data.frame(name=sapply(setCollection$sets, attr, "ID"), 
+			description = sapply(setCollection$sets, attr, "name"), 
+			database=sapply(setCollection$sets, attr, "db"),  pValue = pValues,
+			pp = -log10(pValues), size = sapply(setCollection$sets, length),
+			stringsAsFactors=FALSE)
+	vertexTable$nSignificant = sapply(setCollection$sets, 
+			function(x) length(x %i% testSet))
+	vertexTable = vertexTable[vertexTable$pValue <= setPCutoff,]
+	setNet = if (is.na(edgeTable[1,]$source)) {
+				add.vertices(graph.empty(), nrow(vertexTable),
+						attr=as.list(vertexTable))
+			} else {
+				graph.data.frame(edgeTable, directed=TRUE, 
+						vertices=vertexTable)
+			}
+	setNet
+}
+
+pAdjustAndCorrect <- function(setNet) {
 	if (vcount(setNet) == 0) {
 		return(setNet)
 	}
@@ -240,9 +247,9 @@ addAdjustedPValues <- function(setNet) {
 		correctedPValues = getCorrectedPValues(edgeTable)
 		nodeTable[names(correctedPValues),]$correctedPValue = correctedPValues
 	}
-	nodeTable$adjustedPValue = p.adjust(nodeTable$correctedPValue)
 	nodeTable$pp = -log10(nodeTable$correctedPValue)
 	setNet = graph.data.frame(edgeTable, directed=TRUE, vertices=nodeTable)
+	setNet = getAdjustedPValues(setNet)
 	return(setNet)
 }
 
@@ -267,3 +274,58 @@ getCorrectedPValues <- function(edgeTable) {
 	return(apply(maxPTable, 1, max, na.rm=TRUE))
 }
 
+getAdjustedPValues <- function(setNet) {
+	componentData = clusters(setNet)
+	componentMembers = lapply(1:componentData$no, 
+			function(x) which(componentData$membership == x))
+	componentPValues = p.adjust(sapply(componentMembers, 
+					function(x) min(V(setNet)[x]$correctedPValue)))
+	for (i in 1:componentData$no) {
+		V(setNet)[componentMembers[[i]]]$adjustedPValues = componentPValues[i]
+	}
+	setNet
+}
+
+sinkDelete <- function(setNet, setCollection, setPCutoff, testSet) {
+	edgeTable = get.data.frame(setNet)
+	edgeTable = edgeTable[edgeTable$type=="overlap",]
+	pValues = unlist(by(edgeTable, edgeTable$from, sinkDeletePValue, 
+					setCollection, testSet))
+	toDelete = which(pValues > setPCutoff)
+	setNet - V(setNet)[toDelete]
+}
+
+sinkDeletePValue <- function(subTable, setCollection, testSet) {
+	source = setCollection$sets[[unique(subTable$from)]]
+	discardMatrix = do.call(cbind, lapply(subTable$to, function(s) {
+						sink = setCollection$sets[[s]]
+						source %in% sink
+					}))
+	discard = apply(discardMatrix, 1, any)
+	return(if (all(discard)) 1 else getSetPValue(source[!discard], testSet, 
+								setCollection))
+}
+
+calculateSetRank <- function(setNet) {
+	subsetEdges = which(E(setNet)$type == "subset")
+	subNet = setNet - E(setNet)[subsetEdges]
+	setRank = page.rank(subNet, options=list(maxiter=50000))
+	setNet = set.vertex.attribute(setNet, "setRank", 
+			index=names(setRank$vector), value=setRank$vector)
+	setNet = set.vertex.attribute(setNet, "pSetRank", 
+			index=names(setRank$vector), value=setRankPValue(setNet))
+	setNet
+}
+
+setRankPValue <- function(net, minN=10000) {
+	nNodes = vcount(net)
+	nEdges = ecount(net)
+	nReplicates = round(minN/nNodes)
+	simSetRank = unlist(sapply(1:nReplicates, function(n) {
+						g = erdos.renyi.game(nNodes, nEdges, type="gnm", 
+								directed=TRUE)
+						log(page.rank(g, options=list(maxiter=50000))$vector)
+					}))
+	p.adjust(pnorm(log(V(net)$setRank), mean(simSetRank), sd(simSetRank), 
+					lower.tail=FALSE))
+}

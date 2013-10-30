@@ -77,6 +77,9 @@ getSetPValue.RankedTestSet <- function(geneSet, testSet, setCollection) {
 
 fisherPValue <- function(setCollection, m, i, s) {
 	g = setCollection$g
+	if (i == 0) {
+		return(1)
+	}
 	minimalI = setCollection$iMatrix[s,m]
 	if (is.na(minimalI) || i < minimalI) {
 		return(1)
@@ -89,13 +92,13 @@ fisherPValue <- function(setCollection, m, i, s) {
 buildEdgeTable  <- function(testSet, setCollection, setPValues, setPCutoff) {
 	significantSetIDs = names(setPValues[setPValues <= setPCutoff])
 	message(Sys.time(), " - ", length(significantSetIDs), " significant sets")
-	intersectionTable = setCollection$intersections
+	intersectionTable = as.matrix(setCollection$intersections[,1:2])
 	intersectionsToTest =  apply(intersectionTable, 1, 
 			function(x) (length(x %i% significantSetIDs) == 2))
 	intersectionList = apply(intersectionTable[intersectionsToTest,], 1, 
 			as.list)
-	message(Sys.time(), " - ", length(intersectionList), 1,
-			" intersections to test.")
+	message(Sys.time(), " - ", length(intersectionList),
+			" intersections to test out of ", nrow(intersectionTable))
 	if (length(intersectionList) == 0) {
 		return(data.frame(source=NA, sink=NA, type=NA))
 	}
@@ -181,13 +184,13 @@ getSetPairStatistics.RankedTestSet <- function(row, testSet, setCollection) {
 
 getSetPairStatistics.UnrankedTestSet <- function(row, testSet, setCollection) {
 	stats = getSetPairStatistics_base(row, testSet, setCollection)
-	source = setCollection$sets[[stats$soure]]
+	source = setCollection$sets[[stats$source]]
 	sink = setCollection$sets[[stats$sink]]
 	intersection = source %i% sink
 	unionSet = source %u% sink
 	stats$intersectionSignificant = length(intersection %i% testSet)
-	stat$source_diffSignificant = length(source %i% testSet)
-	stat$sink_diffSignificant = length(sink %i% testSet)
+	stats$source_diffSignificant = length(source %i% testSet)
+	stats$sink_diffSignificant = length(sink %i% testSet)
 	stats$significantJaccard = length(intersection %i% testSet) /
 			length(unionSet %i% testSet)
 	stats
@@ -281,7 +284,7 @@ getAdjustedPValues <- function(setNet) {
 	componentPValues = p.adjust(sapply(componentMembers, 
 					function(x) min(V(setNet)[x]$correctedPValue)))
 	for (i in 1:componentData$no) {
-		V(setNet)[componentMembers[[i]]]$adjustedPValues = componentPValues[i]
+		V(setNet)[componentMembers[[i]]]$adjustedPValue = componentPValues[i]
 	}
 	setNet
 }
@@ -320,7 +323,7 @@ calculateSetRank <- function(setNet) {
 setRankPValue <- function(net, minN=10000) {
 	nNodes = vcount(net)
 	nEdges = ecount(net)
-	nReplicates = round(minN/nNodes)
+	nReplicates = 1 #round(minN/nNodes)
 	simSetRank = unlist(sapply(1:nReplicates, function(n) {
 						g = erdos.renyi.game(nNodes, nEdges, type="gnm", 
 								directed=TRUE)

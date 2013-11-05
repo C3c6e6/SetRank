@@ -92,16 +92,18 @@ fisherPValue <- function(setCollection, m, i, s) {
 buildEdgeTable  <- function(testSet, setCollection, setPValues, setPCutoff) {
 	significantSetIDs = names(setPValues[setPValues <= setPCutoff])
 	message(Sys.time(), " - ", length(significantSetIDs), " significant sets")
-	intersectionTable = as.matrix(setCollection$intersections[,1:2])
-	intersectionsToTest =  apply(intersectionTable, 1, 
-			function(x) (length(x %i% significantSetIDs) == 2))
-	intersectionList = apply(intersectionTable[intersectionsToTest,], 1, 
-			as.list)
-	message(Sys.time(), " - ", length(intersectionList),
-			" intersections to test out of ", nrow(intersectionTable))
-	if (length(intersectionList) == 0) {
+	intersectionList = lapply(apply(setCollection$intersections[,1:2], 1, 
+					as.list), unlist, use.names=FALSE)
+	intersectionsToTest =  unlist(mclapply(intersectionList, 
+					function(x) (length(x %i% significantSetIDs) == 2)), 
+			use.names=FALSE)
+	if (!any(intersectionsToTest)) {
 		return(data.frame(source=NA, sink=NA, type=NA))
 	}
+	intersectionList = intersectionList[intersectionsToTest]
+	n = length(significantSetIDs) * (length(significantSetIDs)-1)/2
+	message(Sys.time(), " - ", length(intersectionList),
+			" intersections to test out of ", n, " possible intersections.")
 	edgeTable = do.call(rbind, mclapply(intersectionList, 
 					getSetPairStatistics, testSet, setCollection))
 	message(Sys.time(), " - edge table constructed.")
@@ -130,8 +132,8 @@ getSetPairStatistics <- function(row, testSet, setCollection)
 	UseMethod("getSetPairStatistics", testSet)
 
 getSetPairStatistics_base <- function(row, testSet, setCollection) {
-	setIDA = row$setA
-	setIDB = row$setB
+	setIDA = row[1]
+	setIDB = row[2]
 	setA = setCollection$sets[[setIDA]]
 	setB = setCollection$sets[[setIDB]]
 	intersection = setA %i% setB
@@ -322,6 +324,9 @@ calculateSetRank <- function(setNet) {
 
 setRankPValue <- function(net, minN=10000) {
 	nNodes = vcount(net)
+	if (nNodes == 0) {
+		return(c())
+	}
 	nEdges = ecount(net)
 	nReplicates = 1 #round(minN/nNodes)
 	simSetRank = unlist(sapply(1:nReplicates, function(n) {

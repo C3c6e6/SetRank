@@ -165,7 +165,7 @@ intersectionTest <- function(g, m, n, i) {
 }
 
 fisherCriticalValues <- function(g,maxSize,criticalP) {
-	do.call(rbind, mclapply(1:(g-1), function(s) {
+	do.call(rbind, mclapply(1:g, function(s) {
 						sapply(1:maxSize, minimalI, s, g, criticalP)
 					}))
 }

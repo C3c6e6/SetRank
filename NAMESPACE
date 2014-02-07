@@ -1,5 +1,5 @@
 export(reactome2AnnotationTable, organismDBI2AnnotationTable, 
-	buildSetCollection, setRankAnalysis)
+	buildSetCollection,createIDConverter, setRankAnalysis)
 S3method(getSetPValue, RankedTestSet)
 S3method(getSetPValue, UnrankedTestSet)
 S3method(getSetPairStatistics, RankedTestSet)

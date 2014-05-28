@@ -69,7 +69,7 @@ expandWithTermOffspring <- function(subTable, tableSplit, offspringList) {
 	expandedTable[!is.na(expandedTable$geneID),]
 }
 
-buildSetCollection <- function(..., referenceSet = NULL, maxSetSize = 2000) {
+buildSetCollection <- function(..., referenceSet = NULL, maxSetSize = 500) {
 	annotationTable = do.call(rbind, list(...))
 	if	(!is.null(referenceSet)) {
 		annotationTable = 

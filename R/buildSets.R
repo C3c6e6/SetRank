@@ -75,6 +75,7 @@ buildSetCollection <- function(..., referenceSet = NULL, maxSetSize = 500) {
 		annotationTable = 
 				annotationTable[annotationTable$geneID %in% referenceSet,]
 	} else {
+		referenceSet = unique(referenceSet)
 		referenceSet = unique(as.character(annotationTable$geneID))
 	}
 	collection = list(maxSetSize = maxSetSize, referenceSet=referenceSet)

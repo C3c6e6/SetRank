@@ -92,8 +92,10 @@ fisherPValue <- function(setCollection, m, i, s) {
 buildEdgeTable  <- function(testSet, setCollection, setPValues, setPCutoff) {
 	significantSetIDs = names(setPValues[setPValues <= setPCutoff])
 	message(Sys.time(), " - ", length(significantSetIDs), " significant sets")
-	intersectionList = lapply(apply(setCollection$intersections[,1:2], 1, 
-					as.list), unlist, use.names=FALSE)
+	intersectionList = if (nrow(setCollection$intersections) > 0) 
+			lapply(apply(setCollection$intersections[,1:2], 1, as.list), 
+					unlist,use.names=FALSE) 
+		else list()
 	intersectionsToTest =  unlist(mclapply(intersectionList, 
 					function(x) (length(x %i% significantSetIDs) == 2)), 
 			use.names=FALSE)

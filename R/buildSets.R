@@ -123,10 +123,14 @@ getSignificantIntersections <- function(collectionSets, annotationTable, g,
 	significantIndices = which(intersectionPValues <= pValueCutoff)
 	pValueFrame = as.data.frame(do.call(rbind, 
 					lapply(intersectionIndices[significantIndices], 
-					function(x)	setIDs[unpack(x, length(setIDs))])))
-	colnames(pValueFrame) <- c("setA", "setB")
-	pValueFrame$pValue = intersectionPValues[significantIndices]
-	message(nrow(pValueFrame), " intersections significant")
+							function(x)	setIDs[unpack(x, length(setIDs))])))
+	if (nrow(pValueFrame) > 0) {
+		colnames(pValueFrame) <- c("setA", "setB")
+		pValueFrame$pValue = intersectionPValues[significantIndices]
+		message(nrow(pValueFrame), " intersections significant")
+	} else {
+		pValueFrame = data.frame(setA=c(),setB=c())
+	}
 	pValueFrame
 }
 

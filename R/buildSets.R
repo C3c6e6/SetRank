@@ -74,21 +74,15 @@ buildSetCollection <- function(..., referenceSet = NULL, maxSetSize = 500) {
 	if	(!is.null(referenceSet)) {
 		annotationTable = 
 				annotationTable[annotationTable$geneID %in% referenceSet,]
+		annotationTable$termID = factor(annotationTable$termID)
 	} else {
 		referenceSet = unique(referenceSet)
 		referenceSet = unique(as.character(annotationTable$geneID))
 	}
 	collection = list(maxSetSize = maxSetSize, referenceSet=referenceSet)
-	collection$sets = by(annotationTable, annotationTable[,"termID"], 
-			function(x) {
-				geneSet = unique(as.character(x[,"geneID"]))
-				attr(geneSet, "ID") <- unique(as.character(x[,"termID"]))
-				attr(geneSet, "name") <- unique(as.character(x[,"termName"]))
-				attr(geneSet, "db") <- unique(as.character(x[,"dbName"]))
-				attr(geneSet, "description") <- 
-						unique(as.character(x[,"description"]))
-				geneSet
-			})
+	collection$sets = if (nrow(annotationTable) == 0) list() else
+				by(annotationTable, annotationTable[,"termID"], createSet, 
+						simplify=FALSE)
 	collection$sets[sapply(collection$sets, is.null)] = NULL
 	collection$g =  length(referenceSet)
 	collection$bigSets = sapply(collection$sets, length) > maxSetSize
@@ -133,6 +127,20 @@ getSignificantIntersections <- function(collectionSets, annotationTable, g,
 	}
 	pValueFrame
 }
+
+createSet <- function(x) {
+	geneSet = unique(as.character(x[,"geneID"]))
+	attr(geneSet, "ID") <- 
+			unique(as.character(x[,"termID"]))
+	attr(geneSet, "name") <- 
+			unique(as.character(x[,"termName"]))
+	attr(geneSet, "db") <- 
+			unique(as.character(x[,"dbName"]))
+	attr(geneSet, "description") <- 
+			unique(as.character(x[,"description"]))
+	geneSet
+}
+
 
 pack <- function(indexPair, n) {
 	if (indexPair[1] > n || indexPair[2] > n) stop("Index higher than n")

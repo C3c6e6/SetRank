@@ -5,7 +5,7 @@
 library("igraph")
 
 setRankAnalysis <- function(geneIDs, setCollection, use.ranks = TRUE,
-		setPCutoff = 0.01, fdrCutoff = 0.05) {
+		setPCutoff = 0.01, fdrCutoff = 0.05, delete = TRUE) {
 	testSet = if (use.ranks) as.RankedTestSet(geneIDs, setCollection) else
 				as.UnrankedTestSet(geneIDs, setCollection)
 	message(Sys.time(), " - calculating primary set p-values")
@@ -16,11 +16,13 @@ setRankAnalysis <- function(geneIDs, setCollection, use.ranks = TRUE,
 	initialNodes = vcount(setNet)
 	message(Sys.time(), " - 1st round of node removal")
 	toDelete = getNodesToDelete(edgeTable)
-	if (length(toDelete) > 0) setNet = setNet - toDelete
+	if (length(toDelete) > 0 && delete) setNet = setNet - toDelete
 	message(Sys.time(), " - calculating SetRank values")
 	setNet = calculateSetRank(setNet)
 	message(Sys.time(), " - secondary delete")
-	setNet = sinkDelete(setNet, setCollection, setPCutoff, testSet)
+	if (delete) {
+		setNet = sinkDelete(setNet, setCollection, setPCutoff, testSet)
+	}
 	message(Sys.time(), " discarded ", initialNodes-vcount(setNet), " out of ", 
 			initialNodes, " gene sets.")
 	setNet = set.graph.attribute(setNet, "analysis", 

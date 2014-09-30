@@ -73,8 +73,8 @@ getSetPValue.RankedTestSet <- function(geneSet, testSet, setCollection) {
 	ranks = sort(testSet[geneSet])
 	ranks = ranks[!is.na(ranks)]
 	if (length(ranks) == 0) return(1)
-	min(p.adjust(sapply(1:length(ranks), function(i) 
-								fisherPValue(setCollection, m, i, ranks[i]))))
+	min(sapply(1:length(ranks), function(i) 
+								fisherPValue(setCollection, m, i, ranks[i])))
 }
 
 fisherPValue <- function(setCollection, m, i, s) {

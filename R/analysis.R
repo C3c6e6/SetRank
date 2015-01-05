@@ -2,7 +2,6 @@
 # 
 # Author: cesim
 ###############################################################################
-library("igraph")
 
 setRankAnalysis <- function(geneIDs, setCollection, use.ranks = TRUE,
 		setPCutoff = 0.01, fdrCutoff = 0.05, delete = TRUE) {
@@ -92,24 +91,25 @@ fisherPValue <- function(setCollection, m, i, s) {
 }
 
 buildEdgeTable  <- function(testSet, setCollection, setPValues, setPCutoff) {
-	significantSetIDs = names(setPValues[setPValues <= setPCutoff])
+	significantSetIDs = setPValues <= setPCutoff
 	message(Sys.time(), " - ", length(significantSetIDs), " significant sets")
-	intersectionList = if (nrow(setCollection$intersections) > 0) 
-			lapply(apply(setCollection$intersections[,1:2], 1, as.list), 
-					unlist,use.names=FALSE) 
-		else list()
-	intersectionsToTest =  unlist(mclapply(intersectionList, 
-					function(x) (length(x %i% significantSetIDs) == 2)), 
-			use.names=FALSE)
-	if (!any(intersectionsToTest)) {
+	intersectionTable = setCollection$intersections
+	bothSignificant = significantSetIDs[intersectionTable$setA] & 
+			significantSetIDs[intersectionTable$setB]
+	intersectionTable = intersectionTable[bothSignificant,]
+	if (nrow(intersectionTable) == 0) {
 		return(data.frame(source=NA, sink=NA, type=NA))
 	}
-	intersectionList = intersectionList[intersectionsToTest]
-	n = length(significantSetIDs) * (length(significantSetIDs)-1)/2
-	message(Sys.time(), " - ", length(intersectionList),
+	n = length(which(significantSetIDs)) * 
+			(length(which(significantSetIDs))-1)/2
+	message(Sys.time(), " - ", nrow(intersectionTable),
 			" intersections to test out of ", n, " possible intersections.")
-	edgeTable = do.call(rbind, mclapply(intersectionList, 
-					getSetPairStatistics, testSet, setCollection))
+	cluster = makeForkCluster()
+	pairStats = parRapply(cluster, intersectionTable, getSetPairStatistics, 
+			testSet, setCollection)
+	stopCluster(cluster)
+	message(Sys.time(), " - intersections evaluated.")
+	edgeTable = do.call(rbind, pairStats)
 	message(Sys.time(), " - edge table constructed.")
 	edgeTable$discardSource = FALSE
 	edgeTable$discardSink = FALSE

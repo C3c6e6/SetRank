@@ -2,8 +2,6 @@
 # 
 # Author: cesim
 ###############################################################################
-library("reactome.db")
-library("GO.db")
 
 uniqueCount <- function(x) {
 	if (class(x) == "factor") length(levels(x)) else length(unique(x))
@@ -117,7 +115,8 @@ getSignificantIntersections <- function(collectionSets, annotationTable, g,
 	significantIndices = which(intersectionPValues <= pValueCutoff)
 	pValueFrame = as.data.frame(do.call(rbind, 
 					lapply(intersectionIndices[significantIndices], 
-							function(x)	setIDs[unpack(x, length(setIDs))])))
+							function(x)	setIDs[unpack(x, length(setIDs))])),
+			stringsAsFactors=FALSE)
 	if (nrow(pValueFrame) > 0) {
 		colnames(pValueFrame) <- c("setA", "setB")
 		pValueFrame$pValue = intersectionPValues[significantIndices]

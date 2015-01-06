@@ -102,9 +102,12 @@ buildEdgeTable  <- function(testSet, setCollection, setPValues, setPCutoff) {
 	}
 	n = length(which(significantSetIDs)) * 
 			(length(which(significantSetIDs))-1)/2
+	nNodes = if (nrow(intersectionTable) < getOption("mc.cores")) 1 else getOption("mc.cores")
 	message(Sys.time(), " - ", nrow(intersectionTable),
-			" intersections to test out of ", n, " possible intersections.")
-	cluster = makeForkCluster()
+			" intersections to test out of ", n, " possible intersections",
+			" using ", nNodes, " cores.")
+        message("Using ", nNodes, " cores")
+	cluster = makeForkCluster(nNodes)
 	pairStats = parRapply(cluster, intersectionTable, getSetPairStatistics, 
 			testSet, setCollection)
 	stopCluster(cluster)

@@ -106,13 +106,12 @@ buildEdgeTable  <- function(testSet, setCollection, setPValues, setPCutoff) {
 	message(Sys.time(), " - ", nrow(intersectionTable),
 			" intersections to test out of ", n, " possible intersections",
 			" using ", nNodes, " cores.")
-        message("Using ", nNodes, " cores")
 	cluster = makeForkCluster(nNodes)
 	pairStats = parRapply(cluster, intersectionTable, getSetPairStatistics, 
 			testSet, setCollection)
 	stopCluster(cluster)
 	message(Sys.time(), " - intersections evaluated.")
-	edgeTable = do.call(rbind, pairStats)
+	edgeTable = rbindlist(pairStats)
 	message(Sys.time(), " - edge table constructed.")
 	edgeTable$discardSource = FALSE
 	edgeTable$discardSink = FALSE

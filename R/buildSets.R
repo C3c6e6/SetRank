@@ -89,16 +89,19 @@ buildSetCollection <- function(..., referenceSet = NULL, maxSetSize = 500) {
 			length(collection$sets) - length(which(collection$bigSets)), 
 			" sets remaining and ", collection$g, " genes in collection")
 	collection$intersection.p.cutoff = 0.01
+	cluster = makeForkCluster()
 	collection$intersections = getSignificantIntersections(collection$sets, 
 			annotationTable, collection$g, collection$intersection.p.cutoff,
-			collection$bigSets)
+			collection$bigSets, cluster)
 	message("Pre-calculating critical Fisher-test values...")
-	collection$iMatrix = fisherCriticalValues(collection$g, maxSetSize, 0.05)
+	collection$iMatrix = fisherCriticalValues(collection$g, maxSetSize, 0.05,
+			cluster)
+	stopCluster(cluster)
 	collection
 }
 
 getSignificantIntersections <- function(collectionSets, annotationTable, g, 
-		pValueCutoff, bigSets) {
+		pValueCutoff, bigSets, cluster) {
 	setIDs = names(collectionSets[!bigSets])
 	setIndicesPerGene = by(annotationTable, annotationTable$geneID, 
 			function(x) which(setIDs %in% as.character(x$termID)))
@@ -110,15 +113,12 @@ getSignificantIntersections <- function(collectionSets, annotationTable, g,
 	intersectionIndices = unique(intersectionIndices)
 	message(length(intersectionIndices), " intersections to test...", 
 			appendLF=FALSE)
-	intersectionPValues = unlist(mclapply(intersectionIndices, 
-					getIntersectionPValue, collectionSets[!bigSets], g))
+	intersectionPValues = parSapply(cluster, intersectionIndices, 
+			getIntersectionPValue, collectionSets[!bigSets], g)
 	significantIndices = which(intersectionPValues <= pValueCutoff)
-	pValueFrame = as.data.frame(do.call(rbind, 
-					lapply(intersectionIndices[significantIndices], 
-							function(x)	setIDs[unpack(x, length(setIDs))])),
-			stringsAsFactors=FALSE)
+	pValueFrame = rbindlist(parLapply(cluster, 
+					intersectionIndices[significantIndices], unpack, setIDs))
 	if (nrow(pValueFrame) > 0) {
-		colnames(pValueFrame) <- c("setA", "setB")
 		pValueFrame$pValue = intersectionPValues[significantIndices]
 		message(nrow(pValueFrame), " intersections significant")
 	} else {
@@ -153,19 +153,19 @@ pack <- function(indexPair, n) {
 	(a-1)*(n-1)+(b-1)
 }
 
-unpack <- function(packed, n) {
-	n_ = n-1
+unpack <- function(packed, setIDs) {
+	n_ = length(setIDs)-1
 	a = ceiling(packed/n_)
 	r = (packed %% n_)
 	b = if (r == 0) n else r+1
 	if (a >= b) stop("Invalid packed value")
-	c(a,b)
+	data.frame(setA=setIDs[a], setB=setIDs[b], stringsAsFactors=FALSE)
 }
 
 getIntersectionPValue <-function(intersectionIndex, setCollection, g) {
-	setIndexPair = unpack(intersectionIndex, length(setCollection))
-	setA = setCollection[[setIndexPair[1]]]
-	setB = setCollection[[setIndexPair[2]]]
+	setIndexPair = unpack(intersectionIndex, names(setCollection))
+	setA = setCollection[[setIndexPair$setA]]
+	setB = setCollection[[setIndexPair$setB]]
 	i = length(setA %i% setB)
 	m = length(setA)
 	n = length(setB)
@@ -176,8 +176,8 @@ intersectionTest <- function(g, m, n, i) {
 	fisher.test(rbind(c(i, n-i), c(m, g-(m+n-i))), alternative="greater")
 }
 
-fisherCriticalValues <- function(g,maxSize,criticalP) {
-	do.call(rbind, mclapply(1:g, function(s) {
+fisherCriticalValues <- function(g,maxSize,criticalP, cluster) {
+	do.call(rbind, parLapply(cluster, 1:g, function(s) {
 						sapply(1:maxSize, minimalI, s, g, criticalP)
 					}))
 }

@@ -28,7 +28,7 @@ organismDBI2AnnotationTable <- function(annotationPackageName) {
 	message("Querying organismDBI...")
 	organismDBIData = select(eval(parse(text=annotationPackageName)), 
 			keys=keys(eval(parse(text=annotationPackageName)), "GOID"), 
-			cols=c("ENTREZID", "TERM"), keytype="GOID")
+			columns=c("ENTREZID", "TERM"), keytype="GOID")
 	message("Constructing preliminary table...")
 	organismDBIData = organismDBIData[!is.na(organismDBIData$ENTREZID),]
 	preliminaryTable = data.frame(geneID = organismDBIData$ENTREZID, 
@@ -41,7 +41,7 @@ organismDBI2AnnotationTable <- function(annotationPackageName) {
 	message("Constructing uncovered term table... ", appendLF=FALSE)
 	omittedTermIDs = names(offspringList) %d% unique(preliminaryTable$termID)
 	message("adding ", length(omittedTermIDs), " omitted terms")
-	omittedTermTable = do.call(rbind, lapply(omittedTermIDs, function(x) { 
+	omittedTermTable = rbindlist(lapply(omittedTermIDs, function(x) { 
 						t = goTerms[[x]]; 
 						data.frame(geneID=NA, termID=GOID(t), termName=Term(t), 
 								dbName=Ontology(t), stringsAsFactors=FALSE)}))
@@ -154,7 +154,8 @@ pack <- function(indexPair, n) {
 }
 
 unpack <- function(packed, setIDs) {
-	n_ = length(setIDs)-1
+	n = length(setIDs)
+	n_ = n-1
 	a = ceiling(packed/n_)
 	r = (packed %% n_)
 	b = if (r == 0) n else r+1

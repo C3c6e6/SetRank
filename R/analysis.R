@@ -92,7 +92,7 @@ fisherPValue <- function(setCollection, m, i, s) {
 
 buildEdgeTable  <- function(testSet, setCollection, setPValues, setPCutoff) {
 	significantSetIDs = setPValues <= setPCutoff
-	message(Sys.time(), " - ", length(significantSetIDs), " significant sets")
+	message(Sys.time(), " - ", length(which(significantSetIDs)), " significant sets")
 	intersectionTable = setCollection$intersections
 	bothSignificant = significantSetIDs[intersectionTable$setA] & 
 			significantSetIDs[intersectionTable$setB]

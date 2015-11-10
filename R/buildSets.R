@@ -7,53 +7,6 @@ uniqueCount <- function(x) {
 	if (class(x) == "factor") length(levels(x)) else length(unique(x))
 }
 
-reactome2AnnotationTable <- function(organismName) {
-	pathways <- toTable(reactomePATHNAME2ID)
-	searchPattern = sprintf("^\\s*%s\\s*:\\s*", organismName)
-	organismPathways = unique(pathways[grep(searchPattern,pathways$path_name),])
-	organismPathways$path_name = sub(searchPattern, "", 
-			organismPathways$path_name)
-	rownames(organismPathways) <- organismPathways$DB_ID
-	path2GeneID = as.list(reactomePATHID2EXTID)
-	nonEmptyPaths = rownames(organismPathways) %i% names(path2GeneID)
-	do.call(rbind, lapply(nonEmptyPaths, function(x) data.frame(
-								geneID=path2GeneID[[x]], 
-								termID=paste("REACTOME", x, sep=":"),
-								termName=organismPathways[x,]$path_name, 
-								dbName="Reactome", stringsAsFactors=FALSE)))
-}
-
-organismDBI2AnnotationTable <- function(annotationPackageName) {
-	require(annotationPackageName, character.only=TRUE)
-	message("Querying organismDBI...")
-	organismDBIData = select(eval(parse(text=annotationPackageName)), 
-			keys=keys(eval(parse(text=annotationPackageName)), "GOID"), 
-			columns=c("ENTREZID", "TERM"), keytype="GOID")
-	message("Constructing preliminary table...")
-	organismDBIData = organismDBIData[!is.na(organismDBIData$ENTREZID),]
-	preliminaryTable = data.frame(geneID = organismDBIData$ENTREZID, 
-			termID = organismDBIData$GOID, termName = organismDBIData$TERM,
-			dbName = organismDBIData$ONTOLOGY, stringsAsFactors=FALSE)
-	message("Querying GO.db...")
-	offspringList = c(as.list(GOBPOFFSPRING), as.list(GOCCOFFSPRING), 
-			as.list(GOMFOFFSPRING))
-	goTerms = as.list(GOTERM)
-	message("Constructing uncovered term table... ", appendLF=FALSE)
-	omittedTermIDs = names(offspringList) %d% unique(preliminaryTable$termID)
-	message("adding ", length(omittedTermIDs), " omitted terms")
-	omittedTermTable = rbindlist(lapply(omittedTermIDs, function(x) { 
-						t = goTerms[[x]]; 
-						data.frame(geneID=NA, termID=GOID(t), termName=Term(t), 
-								dbName=Ontology(t), stringsAsFactors=FALSE)}))
-	message("merging...")
-	preliminaryTable = rbind(preliminaryTable, omittedTermTable)
-	message("splitting...")
-	tableSplit = split(preliminaryTable, preliminaryTable$termID)
-	message("extending...")
-	do.call(rbind, lapply(tableSplit, expandWithTermOffspring, tableSplit, 
-					offspringList))
-}
-
 expandWithTermOffspring <- function(subTable, tableSplit, offspringList) {
 	termID = unique(as.character(subTable$termID))
 	termName = unique(as.character(subTable$termName))

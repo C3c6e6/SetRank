@@ -237,6 +237,7 @@ buildSetNet <- function(edgeTable, setCollection, testSet, pValues, setPCutoff)
 	vertexTable$nSignificant = sapply(setCollection$sets, 
 			function(x) length(x %i% testSet))
 	vertexTable = vertexTable[vertexTable$pValue <= setPCutoff,]
+    edgeTable = edgeTable[edgeTable$pIntersection <= setPCutoff,]
 	setNet = if (is.na(edgeTable[1,]$source)) {
 				add.vertices(graph.empty(), nrow(vertexTable),
 						attr=as.list(vertexTable))

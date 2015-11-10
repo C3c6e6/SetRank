@@ -2,7 +2,28 @@
 # 
 # Author: cesim
 ###############################################################################
-
+#' Advanced gene set enrichment analysis.
+#' 
+#' Performs advanced gene set enrichment analysis on a set of genes.
+#' 
+#' @param geneIDs A vector containing the set of gene IDs to test for gene set 
+#' enrichment. This is typically the list of significant genes returned by the 
+#' analysis of an omics dataset.
+#' @param setCollection A gene set collection object, generated with the
+#' \code{\link{buildSetCollection}} function.
+#' @param use.ranks Logical value indicating if the \code{geneIDs} vector is in
+#' ranked order or not. When \code{TRUE}, a ranked analysis will be performed.
+#' @param setPCutoff The p-value cutoff to be used to consider a gene set
+#' significant. Recommended value: 0.01
+#' @param fdrCutoff The cutoff to be applied on the corrected p-value after
+#' false-positive sets have been removed.
+#' 
+#' @return An igraph object. Use the igraph \code{\link{get.data.frame}} 
+#' function to get a data frame with all the significant gene sets.
+#' @author Cedric Simillion
+#' @import igraph
+#' @import parallel
+#' @export 
 setRankAnalysis <- function(geneIDs, setCollection, use.ranks = TRUE,
 		setPCutoff = 0.01, fdrCutoff = 0.05, delete = TRUE) {
 	testSet = if (use.ranks) as.RankedTestSet(geneIDs, setCollection) else
@@ -60,6 +81,7 @@ getPrimarySetPValues <- function(testSet, setCollection) {
 getSetPValue <- function(geneSet, testSet, setCollection)
 	UseMethod("getSetPValue", testSet)
 
+#' @S3method getSetPValue UnrankedTestSet
 getSetPValue.UnrankedTestSet <- function(geneSet, testSet, setCollection) {
 	m = length(geneSet)
 	i = length(geneSet %i% testSet)
@@ -67,6 +89,7 @@ getSetPValue.UnrankedTestSet <- function(geneSet, testSet, setCollection) {
 	fisherPValue(setCollection, m, i, s)
 }
 
+#' @S3method getSetPValue RankedTestSet
 getSetPValue.RankedTestSet <- function(geneSet, testSet, setCollection) {
 	m = length(geneSet)
 	ranks = sort(testSet[geneSet])
@@ -184,12 +207,14 @@ getSetPairStatistics_base <- function(row, testSet, setCollection) {
 			stringsAsFactors=FALSE)	
 }
 
+#' @S3method getSetPairStatistics RankedTestSet
 getSetPairStatistics.RankedTestSet <- function(row, testSet, setCollection) {
 	stats = getSetPairStatistics_base(row, testSet, setCollection)
 	stats$significantJaccard = stats$jaccard
 	stats
 }
 
+#' @S3method getSetPairStatistics UnrankedTestSet
 getSetPairStatistics.UnrankedTestSet <- function(row, testSet, setCollection) {
 	stats = getSetPairStatistics_base(row, testSet, setCollection)
 	source = setCollection$sets[[stats$source]]

@@ -89,6 +89,7 @@ exportMultipleResults <- function(networkList, selectedGenesList, collection,
 #' written. If the last element of the path doesn't exist, a directory will be
 #' created.
 #' @return None. Files are written out as a side effect. 
+#' @author Cedric Simillion
 #' @export
 exportSingleResult <- function(network, selectedGenes, collection, networkName,
 		IDConverter = NULL, outputPath="./") {

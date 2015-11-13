@@ -17,13 +17,13 @@ last element in the path will be created when it doesn't exist.}
 None. The function writes out files as a side effect.
 }
 \description{
-Exports a list of networks in GML format and creates a Cytoscape a VizMap 
-XML file with a visualisation style applicable to all networks.
+Exports a list of networks in GraphML format and creates a Cytoscape a 
+VizMap XML file with a visualisation style applicable to all networks.
 }
 \details{
 Each network will be written to a separate file in the specified output 
 directory. The names of the supplied list of networks will be used as
-filenames with the \code{.gml} extension added. The VizMap file will be 
+filenames with the \code{.net.xml} extension added. The VizMap file will be 
 called \code{setrank.xml} and will also be written to the output directory.
 }
 \author{

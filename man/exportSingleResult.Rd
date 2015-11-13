@@ -45,4 +45,7 @@ pathway, called  \code{<n>_membership.txt} with \code{<n>} again the network
 name.
 }
 }
+\author{
+Cedric Simillion
+}
 

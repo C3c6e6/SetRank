@@ -8,6 +8,7 @@ Maintainer: Cedric Simillion <cedric.simillion@dkf.unibe.ch>
 Description: The SetRank package implements an algorithm to conduct advanced
     gene set enrichment analysis on the results of genomics experiments.
 License: GPL-3
+Imports: XML, data.table, igraph
 RoxygenNote: 5.0.1
 Suggests: R.rsp
 VignetteBuilder: R.rsp

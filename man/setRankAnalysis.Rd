@@ -23,6 +23,10 @@ significant. Recommended value: 0.01}
 
 \item{fdrCutoff}{The cutoff to be applied on the corrected p-value after
 false-positive sets have been removed.}
+
+\item{delete}{A flag indicating if non-significant gene sets should be 
+deleted, which is the behaviour that you want. It is best to ignore this
+argument, it was only added for debugging purposes.}
 }
 \value{
 An igraph object. Use the igraph \code{\link{get.data.frame}} 

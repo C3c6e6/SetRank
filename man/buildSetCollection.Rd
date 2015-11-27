@@ -73,9 +73,8 @@ collection using the \code{load} command.
 \describe{
   \item{geneID}{The gene identifier. Can be any type of identifier, but one
     must make sure that all annotation frames passed to 
-    \code{buildSetCollection} use the same identifier. As the output of the 
-    \code{\link{organismDBI2AnnotationTable}} and
-    \code{\link{reactome2AnnotationTable}} use Entrez Gene identifiers, it
+    \code{buildSetCollection} use the same identifier. As the packages 
+    created by the GeneSets package use Entrez Gene identifiers, it
     is best to use these in your own annotation frames as well. Also, make 
     sure the identifiers as passed as character and not as integer values.}
   \item{termID}{Pathway identifier. Make sure each pathway identifier is 

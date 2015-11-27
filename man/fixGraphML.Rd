@@ -6,8 +6,14 @@
 \usage{
 fixGraphML(fileName)
 }
+\arguments{
+\item{fileName}{the name of the file to fix.}
+}
 \description{
 This function only exists to fix some issues with the graphML output of the 
 igraph module.
+}
+\author{
+Cedric Simillion
 }
 

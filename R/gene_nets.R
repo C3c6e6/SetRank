@@ -148,6 +148,9 @@ createGeneNetVizFile <- function(names, outDir) {
 #' 
 #' This function only exists to fix some issues with the graphML output of the 
 #' igraph module. 
+#'
+#' @param fileName the name of the file to fix.
+#' @author Cedric Simillion
 fixGraphML <- function(fileName) {
 	netName = sub("\\.net\\.xml$", "", basename(fileName))
 	lines = readLines(fileName)

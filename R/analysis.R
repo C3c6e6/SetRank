@@ -17,6 +17,9 @@
 #' significant. Recommended value: 0.01
 #' @param fdrCutoff The cutoff to be applied on the corrected p-value after
 #' false-positive sets have been removed.
+#' @param delete A flag indicating if non-significant gene sets should be 
+#' deleted, which is the behaviour that you want. It is best to ignore this
+#' argument, it was only added for debugging purposes.
 #' 
 #' @return An igraph object. Use the igraph \code{\link{get.data.frame}} 
 #' function to get a data frame with all the significant gene sets.

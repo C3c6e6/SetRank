@@ -35,6 +35,18 @@ function to get a data frame with all the significant gene sets.
 \description{
 Performs advanced gene set enrichment analysis on a set of genes.
 }
+\examples{
+genes = sprintf("gene_\%03d", 1:100)
+geneSets = lapply(1:9, function(i) sample(genes[((i-1)*10):((i+1)*10)], 10))
+annotationTable = data.frame(termID=sprintf("set_\%02d", rep(1:9, each=10)), 
+        geneID=unlist(geneSets),
+        termName = sprintf("dummy gene setet \%d", rep(1:9, each=10)),
+        dbName = "dummyDB",
+        description = "A dummy gene set DB for testing purposes")
+collection = buildSetCollection(annotationTable, referenceSet=genes)
+network = setRankAnalysis(genes, collection, TRUE)
+
+}
 \author{
 Cedric Simillion
 }

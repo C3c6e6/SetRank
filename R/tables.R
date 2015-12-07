@@ -89,6 +89,16 @@ exportMultipleResults <- function(networkList, selectedGenesList, collection,
 #' written. If the last element of the path doesn't exist, a directory will be
 #' created.
 #' @return None. Files are written out as a side effect. 
+#' genes = sprintf("gene_%03d", 1:100)
+#' geneSets = lapply(1:9, function(i) sample(genes[((i-1)*10):((i+1)*10)], 10))
+#' annotationTable = data.frame(termID=sprintf("set_%02d", rep(1:9, each=10)), 
+#'         geneID=unlist(geneSets),
+#'         termName = sprintf("dummy gene set %d", rep(1:9, each=10)),
+#'         dbName = "dummyyDB",
+#'         description = "A dummy gene set DB for testing purposes")
+#' collection = buildSetCollection(annotationTable, referenceSet=genes)
+#' network = setRankAnalysis(genes, collection, TRUE)
+#' exportSingleResult(network, genes, collection, "example", function(x) x, "example_dir")
 #' @author Cedric Simillion
 #' @export
 exportSingleResult <- function(network, selectedGenes, collection, networkName,

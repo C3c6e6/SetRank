@@ -80,11 +80,24 @@ collection using the \code{load} command.
   \item{termID}{Pathway identifier. Make sure each pathway identifier is 
     unique across all pathway databases used. You can do this by prefixing 
     the IDs with a namespace identifier like \code{"REACTOME:"}.}
-  \item{termName}{Pathway description. A string describing the pathway, e.g.
+  \item{termName}{Name of the pathway. A string describing the pathway, e.g.
     "negative regulation of sterol metabolism"}
+  \item{description}{Pathway description. A longer description of the 
+    pathway. This field can be a full paragraph describing what this pathway
+    does.}
   \item{dbName}{A short string given the name of the pathway database used for
     the annotation. E.g. "KEGG".}
 }
+}
+\examples{
+referenceSet = sprintf("gene_\%03d", 1:100)
+geneSets = lapply(1:9, function(i) sample(referenceSet[((i-1)*10):((i+1)*10)], 10))
+annotationTable = data.frame(termID=sprintf("set_\%02d", rep(1:9, each=10)), 
+        geneID=unlist(geneSets),
+        termName = sprintf("dummy gene set \%d", rep(1:9, each=10)),
+        dbName = "dummyDB",
+        description = "A dummy gene set DB for testing purposes")
+collection = buildSetCollection(annotationTable, referenceSet=referenceSet)
 }
 \author{
 Cedric Simillion

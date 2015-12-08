@@ -8,4 +8,4 @@ SetRank, you can simply install the R package from CRAN like this:
 install.packages("SetRank")
 ```
 
-
+You can find the SetRank manual at the [CRAN repository](https://cran.r-project.org/web/packages/SetRank/index.html).

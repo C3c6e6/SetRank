@@ -90,6 +90,7 @@ collection using the \code{load} command.
 }
 }
 \examples{
+options(mc.cores=1)
 referenceSet = sprintf("gene_\%02d", 1:50)
 geneSets = lapply(1:9, function(i) sample(referenceSet[((i-1)*5):((i+1)*5)], 5))
 annotationTable = data.frame(termID=sprintf("set_\%02d", rep(1:9, each=5)), 

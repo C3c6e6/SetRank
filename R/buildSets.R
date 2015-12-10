@@ -98,6 +98,7 @@ expandWithTermOffspring <- function(subTable, tableSplit, offspringList) {
 #'     together with the p-value.}  
 #' }
 #' @examples
+#' options(mc.cores=1)
 #' referenceSet = sprintf("gene_%02d", 1:50)
 #' geneSets = lapply(1:9, function(i) sample(referenceSet[((i-1)*5):((i+1)*5)], 5))
 #' annotationTable = data.frame(termID=sprintf("set_%02d", rep(1:9, each=5)), 
@@ -131,7 +132,8 @@ buildSetCollection <- function(..., referenceSet = NULL, maxSetSize = 500) {
 			length(collection$sets) - length(which(collection$bigSets)), 
 			" sets remaining and ", collection$g, " genes in collection")
 	collection$intersection.p.cutoff = 0.01
-	cluster = makeForkCluster()
+	cluster = if (.Platform$OS.type == "windows") 
+            makePSOCKcluster(getOption("mc.cores")) else makeForkCluster()
 	collection$intersections = getSignificantIntersections(collection$sets, 
 			annotationTable, collection$g, collection$intersection.p.cutoff,
 			collection$bigSets, cluster)

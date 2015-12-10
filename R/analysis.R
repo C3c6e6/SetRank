@@ -145,7 +145,8 @@ buildEdgeTable  <- function(testSet, setCollection, setPValues, setPCutoff) {
 	message(Sys.time(), " - ", nrow(intersectionTable),
 			" intersections to test out of ", n, " possible intersections",
 			" using ", nNodes, " cores.")
-	cluster = makeForkCluster(nNodes)
+	cluster = if (.Platform$OS.type == "windows") makePSOCKcluster(nNodes) else 
+            makeForkCluster(nNodes)
 	pairStats = parRapply(cluster, intersectionTable, getSetPairStatistics, 
 			testSet, setCollection)
 	stopCluster(cluster)

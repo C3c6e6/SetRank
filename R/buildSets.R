@@ -122,7 +122,7 @@ buildSetCollection <- function(..., referenceSet = NULL, maxSetSize = 500) {
 	}
 	collection = list(maxSetSize = maxSetSize, referenceSet=referenceSet)
 	collection$sets = if (nrow(annotationTable) == 0) list() else
-				by(annotationTable, annotationTable[,"termID"], createSet, 
+				by(annotationTable, annotationTable$termID, createSet, 
 						simplify=FALSE)
 	collection$sets[sapply(collection$sets, is.null)] = NULL
 	collection$g =  length(referenceSet)

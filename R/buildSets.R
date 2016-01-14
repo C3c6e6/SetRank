@@ -173,15 +173,15 @@ getSignificantIntersections <- function(collectionSets, annotationTable, g,
 }
 
 createSet <- function(x) {
-	geneSet = unique(as.character(x[,"geneID"]))
+	geneSet = unique(as.character(x$geneID))
 	attr(geneSet, "ID") <- 
-			unique(as.character(x[,"termID"]))
+			unique(as.character(x$termID))
 	attr(geneSet, "name") <- 
-			unique(as.character(x[,"termName"]))
+			unique(as.character(x$termName))
 	attr(geneSet, "db") <- 
-			unique(as.character(x[,"dbName"]))
+			unique(as.character(x$dbName))
 	attr(geneSet, "description") <- 
-			unique(as.character(x[,"description"]))
+			unique(as.character(x$description))
 	geneSet
 }
 

@@ -107,10 +107,11 @@ getSetPValue.UnrankedTestSet <- function(geneSet, testSet, setCollection) {
 
 #' @S3method getSetPValue RankedTestSet
 getSetPValue.RankedTestSet <- function(geneSet, testSet, setCollection) {
-	m = length(geneSet)
 	ranks = sort(testSet[geneSet])
 	ranks = ranks[!is.na(ranks)]
 	if (length(ranks) == 0) return(1)
+	m = length(ranks)
+    setCollection$g = length(testSet)
 	min(sapply(1:length(ranks), function(i) 
 								fisherPValue(setCollection, m, i, ranks[i])))
 }

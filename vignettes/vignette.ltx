@@ -877,7 +877,7 @@ column with the Entrez Gene IDs to the \texttt{inputData} data frame,
 you can use
 
 \begin{lstlisting}
-ensembl2Entrez = createIDConverter("Homo.sapiens", "ENSEMBLID", 
+ensembl2Entrez = createIDConverter("Homo.sapiens", "ENSEMBL", 
 	"ENTREZID")
 inputData$entrezID = ensembl2Entrez(inputData$geneID, na.rm=FALSE, 
 	drop.ambiguous=TRUE)
@@ -977,7 +977,7 @@ convert them first by again creating a converter function (see appendix
 of input genes.
 
 \begin{lstlisting}
-ensembl2Entrez = createIDConverter("Homo.sapiens", "ENSEMBLID", 
+ensembl2Entrez = createIDConverter("Homo.sapiens", "ENSEMBL", 
 	"ENTREZID")
 genes = lapply(genes, ensembl2Entrez)
 \end{lstlisting}

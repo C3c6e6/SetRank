@@ -46,9 +46,9 @@ exportMultipleResults <- function(networkList, selectedGenesList, collection,
 		dir.create(outputPath)
 	}
 	for (n in names(networkList)) {
-		write.table(getNodeTable(networkList[[n]]), 
-				sprintf("%s/%s_pathways.txt", outputPath, n), sep="\t", 
-				row.names=FALSE, quote=FALSE)
+		if (!safeWriteNodeTable(networkList[[n]], sprintf("%s/%s_pathways.txt", outputPath, n))) {
+			warning("Skipped table write for empty network: ", networkName)
+		}
 		writeMembership(sprintf("%s/%s_membership.txt", outputPath, n),
 				selectedGenesList[[n]], collection, networkList[[n]], 
 				IDConverter)
@@ -106,8 +106,9 @@ exportSingleResult <- function(network, selectedGenes, collection, networkName,
 	if (!file.exists(outputPath)) {
 		dir.create(outputPath)
 	}
-	write.table(getNodeTable(network), sprintf("%s/%s_pathways.txt", outputPath, 
-					networkName), sep="\t", row.names=FALSE, quote=FALSE)
+	if (!safeWriteNodeTable(network, sprintf("%s/%s_pathways.txt", outputPath, networkName))) {
+		warning("Skipped table write for empty network: ", networkName)
+	}
 	writeMembership(sprintf("%s/%s_membership.txt", outputPath, networkName),
 			selectedGenes, collection, network, IDConverter)
 	write.graph(network, sprintf("%s/%s.net.xml", outputPath, networkName),
@@ -160,6 +161,16 @@ getNodeTable <- function(network) {
 	table[order(table$pSetRank, table$adjustedPValue, table$correctedPValue),]
 }
 
+# If a node table is nonempty, attempt to write it to the given file; warn otherwise.
+safeWriteNodeTable <- function(network, outfile) {
+	nodes <- getNodeTable(network)
+	if (0 == nrow(nodes))
+	else {
+		write.table(nodes, outfile, sep="\t", row.names=FALSE, quote=FALSE)
+		TRUE
+	}
+}
+
 #' Creates a table of all significant pathways in different conditions.
 #' 
 #' @param networkList A list of SetRank networks created using the same
@@ -180,6 +191,11 @@ getNodeTable <- function(network) {
 #' @export 
 createPathwayTable <- function(networkList, setCollection) {
 	nodeTables = lapply(networkList, getNodeTable)
+	emptyTables = Filter(function(n) 0 == nrow(nodeTables[[n]]), names(nodeTables))
+	if (length(emptyTables) > 0) {
+		warning(sprintf("Skipping %d networks with empty node table: %s", length(emptyTables), paste0(emptyTables, collapse = ", ")))
+		nodeTables = Filter(function(nt) nrow(nt) > 0, nodeTables)
+	}
 	rankScores = lapply(nodeTables, function(t) {
 				scores = rev(seq_along(t$name))/nrow(t)
 				names(scores) <- t$name

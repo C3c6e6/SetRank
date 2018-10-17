@@ -142,7 +142,7 @@ buildEdgeTable  <- function(testSet, setCollection, setPValues, setPCutoff) {
 	}
 	n = length(which(significantSetIDs)) * 
 			(length(which(significantSetIDs))-1)/2
-	nNodes = if (nrow(intersectionTable) < getOption("mc.cores")) 1 else getOption("mc.cores")
+	nNodes = if (is.null(getOption("mc.cores")) || (nrow(intersectionTable) < getOption("mc.cores"))) 1 else getOption("mc.cores")
 	message(Sys.time(), " - ", nrow(intersectionTable),
 			" intersections to test out of ", n, " possible intersections",
 			" using ", nNodes, " cores.")

@@ -47,8 +47,10 @@ exportMultipleResults <- function(networkList, selectedGenesList, collection,
 	}
 	totalNetworkCount = length(networkList)
 	networkList = Filter(function(n) nrow(getNodeTable(n)) > 0, networkList)
-	message(sprintf("Dropped as empty %d of %d networks", 
-		totalNetworkCount - length(networkList), totalNetworkCount))
+	if (length(networkList) < totalNetworkCount) {
+		warning(sprintf("Dropped as empty %d of %d networks", 
+			totalNetworkCount - length(networkList), totalNetworkCount))
+	}
 	for (n in names(networkList)) {
 		if (!safeWriteNodeTable(networkList[[n]], sprintf("%s/%s_pathways.txt", outputPath, n))) {
 			stop("Empty network survived filtration: ", n)

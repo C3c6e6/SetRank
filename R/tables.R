@@ -45,13 +45,20 @@ exportMultipleResults <- function(networkList, selectedGenesList, collection,
 	if (!file.exists(outputPath)) {
 		dir.create(outputPath)
 	}
+	totalNetworkCount = length(networkList)
+	networkList = Filter(function(n) nrow(getNodeTable(n)) > 0, networkList)
+	if (length(networkList) < totalNetworkCount) {
+		warning(sprintf("Dropped as empty %d of %d networks", 
+			totalNetworkCount - length(networkList), totalNetworkCount))
+	}
 	for (n in names(networkList)) {
-		write.table(getNodeTable(networkList[[n]]), 
-				sprintf("%s/%s_pathways.txt", outputPath, n), sep="\t", 
-				row.names=FALSE, quote=FALSE)
-		writeMembership(sprintf("%s/%s_membership.txt", outputPath, n),
-				selectedGenesList[[n]], collection, networkList[[n]], 
-				IDConverter)
+		if (!safeWriteNodeTable(networkList[[n]], sprintf("%s/%s_pathways.txt", outputPath, n))) {
+			stop("Empty network survived filtration: ", n)
+		} else {
+			writeMembership(sprintf("%s/%s_membership.txt", outputPath, n),
+					selectedGenesList[[n]], collection, networkList[[n]], 
+					IDConverter)
+		}
 	}
 	cytoscapeExport(networkList, outputPath)
 	pathways = createPathwayTable(networkList, collection)
@@ -106,14 +113,16 @@ exportSingleResult <- function(network, selectedGenes, collection, networkName,
 	if (!file.exists(outputPath)) {
 		dir.create(outputPath)
 	}
-	write.table(getNodeTable(network), sprintf("%s/%s_pathways.txt", outputPath, 
-					networkName), sep="\t", row.names=FALSE, quote=FALSE)
-	writeMembership(sprintf("%s/%s_membership.txt", outputPath, networkName),
-			selectedGenes, collection, network, IDConverter)
-	write.graph(network, sprintf("%s/%s.net.xml", outputPath, networkName),
-			format="graphML")
-	createCytoscapeVizMap(network=network, outputFile=sprintf("%s/setrank.xml",
-					outputPath))
+	if (!safeWriteNodeTable(network, sprintf("%s/%s_pathways.txt", outputPath, networkName))) {
+		warning("Skipped table write for empty network: ", networkName)
+	} else {
+		writeMembership(sprintf("%s/%s_membership.txt", outputPath, networkName),
+				selectedGenes, collection, network, IDConverter)
+		write.graph(network, sprintf("%s/%s.net.xml", outputPath, networkName),
+				format="graphML")
+		createCytoscapeVizMap(network=network, outputFile=sprintf("%s/setrank.xml",
+						outputPath))
+	}
 }
 
 writeMembership <- function(outputFile, selectedGenes, collection, network, 
@@ -157,7 +166,17 @@ getNodeTable <- function(network) {
 	table$pValue = NULL
 	table$nSignificant = NULL
 	table$pp = NULL
-	table[order(table$pSetRank, table$adjustedPValue, table$correctedPValue),]
+	if (0 == nrow(table)) table else  { table[order(table$pSetRank, table$adjustedPValue, table$correctedPValue),] }
+}
+
+# If a node table is nonempty, attempt to write it to the given file; warn otherwise.
+safeWriteNodeTable <- function(network, outfile) {
+	nodes <- getNodeTable(network)
+	if (0 == nrow(nodes)) { FALSE }
+	else {
+		write.table(nodes, outfile, sep="\t", row.names=FALSE, quote=FALSE)
+		TRUE
+	}
 }
 
 #' Creates a table of all significant pathways in different conditions.
@@ -180,6 +199,11 @@ getNodeTable <- function(network) {
 #' @export 
 createPathwayTable <- function(networkList, setCollection) {
 	nodeTables = lapply(networkList, getNodeTable)
+	emptyTables = Filter(function(n) 0 == nrow(nodeTables[[n]]), names(nodeTables))
+	if (length(emptyTables) > 0) {
+		warning(sprintf("Skipping %d networks with empty node table: %s", length(emptyTables), paste0(emptyTables, collapse = ", ")))
+		nodeTables = Filter(function(nt) nrow(nt) > 0, nodeTables)
+	}
 	rankScores = lapply(nodeTables, function(t) {
 				scores = rev(seq_along(t$name))/nrow(t)
 				names(scores) <- t$name

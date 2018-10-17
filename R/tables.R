@@ -164,7 +164,7 @@ getNodeTable <- function(network) {
 # If a node table is nonempty, attempt to write it to the given file; warn otherwise.
 safeWriteNodeTable <- function(network, outfile) {
 	nodes <- getNodeTable(network)
-	if (0 == nrow(nodes))
+	if (0 == nrow(nodes)) { FALSE }
 	else {
 		write.table(nodes, outfile, sep="\t", row.names=FALSE, quote=FALSE)
 		TRUE

@@ -47,7 +47,7 @@ exportMultipleResults <- function(networkList, selectedGenesList, collection,
 	}
 	for (n in names(networkList)) {
 		if (!safeWriteNodeTable(networkList[[n]], sprintf("%s/%s_pathways.txt", outputPath, n))) {
-			warning("Skipped table write for empty network: ", networkName)
+			warning("Skipped table write for empty network: ", n)
 		}
 		writeMembership(sprintf("%s/%s_membership.txt", outputPath, n),
 				selectedGenesList[[n]], collection, networkList[[n]], 

@@ -45,14 +45,19 @@ exportMultipleResults <- function(networkList, selectedGenesList, collection,
 	if (!file.exists(outputPath)) {
 		dir.create(outputPath)
 	}
-	for (n in names(networkList)) {
+	networkIndices = c()
+	for (i in 1:length(networkList)) {
+		n = names(networkList)[i]
 		if (!safeWriteNodeTable(networkList[[n]], sprintf("%s/%s_pathways.txt", outputPath, n))) {
 			warning("Skipped table write for empty network: ", n)
+		} else {
+			writeMembership(sprintf("%s/%s_membership.txt", outputPath, n),
+					selectedGenesList[[n]], collection, networkList[[n]], 
+					IDConverter)
+			networkIndices = append(networkIndices, i)
 		}
-		writeMembership(sprintf("%s/%s_membership.txt", outputPath, n),
-				selectedGenesList[[n]], collection, networkList[[n]], 
-				IDConverter)
 	}
+	networkList = networkList[networkIndices]
 	cytoscapeExport(networkList, outputPath)
 	pathways = createPathwayTable(networkList, collection)
 	write.table(pathways, sprintf("%s/pathways.txt", outputPath), sep="\t",
@@ -108,13 +113,14 @@ exportSingleResult <- function(network, selectedGenes, collection, networkName,
 	}
 	if (!safeWriteNodeTable(network, sprintf("%s/%s_pathways.txt", outputPath, networkName))) {
 		warning("Skipped table write for empty network: ", networkName)
+	} else {
+		writeMembership(sprintf("%s/%s_membership.txt", outputPath, networkName),
+				selectedGenes, collection, network, IDConverter)
+		write.graph(network, sprintf("%s/%s.net.xml", outputPath, networkName),
+				format="graphML")
+		createCytoscapeVizMap(network=network, outputFile=sprintf("%s/setrank.xml",
+						outputPath))
 	}
-	writeMembership(sprintf("%s/%s_membership.txt", outputPath, networkName),
-			selectedGenes, collection, network, IDConverter)
-	write.graph(network, sprintf("%s/%s.net.xml", outputPath, networkName),
-			format="graphML")
-	createCytoscapeVizMap(network=network, outputFile=sprintf("%s/setrank.xml",
-					outputPath))
 }
 
 writeMembership <- function(outputFile, selectedGenes, collection, network, 

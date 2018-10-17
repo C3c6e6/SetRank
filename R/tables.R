@@ -45,19 +45,19 @@ exportMultipleResults <- function(networkList, selectedGenesList, collection,
 	if (!file.exists(outputPath)) {
 		dir.create(outputPath)
 	}
-	networkIndices = c()
-	for (i in 1:length(networkList)) {
-		n = names(networkList)[i]
+	totalNetworkCount = length(networkList)
+	networkList = Filter(function(n) nrow(getNodeTable(n)) > 0, networkList)
+	message(sprintf("Dropped as empty %d of %d networks", 
+		totalNetworkCount - length(nonEmptyNetworks), totalNetworkCount))
+	for (n in names(networkList)) {
 		if (!safeWriteNodeTable(networkList[[n]], sprintf("%s/%s_pathways.txt", outputPath, n))) {
-			warning("Skipped table write for empty network: ", n)
+			stop("Empty network survived filtration: ", n)
 		} else {
 			writeMembership(sprintf("%s/%s_membership.txt", outputPath, n),
 					selectedGenesList[[n]], collection, networkList[[n]], 
 					IDConverter)
-			networkIndices = append(networkIndices, i)
 		}
 	}
-	networkList = networkList[networkIndices]
 	cytoscapeExport(networkList, outputPath)
 	pathways = createPathwayTable(networkList, collection)
 	write.table(pathways, sprintf("%s/pathways.txt", outputPath), sep="\t",

@@ -158,7 +158,7 @@ getNodeTable <- function(network) {
 	table$pValue = NULL
 	table$nSignificant = NULL
 	table$pp = NULL
-	table[order(table$pSetRank, table$adjustedPValue, table$correctedPValue),]
+	if (0 == nrow(table)) table else  { table[order(table$pSetRank, table$adjustedPValue, table$correctedPValue),] }
 }
 
 # If a node table is nonempty, attempt to write it to the given file; warn otherwise.
